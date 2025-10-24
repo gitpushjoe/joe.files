@@ -303,7 +303,7 @@ shows up in my editor as
 | !rend
 ```
 
-(The !rend should show up as a 🏳️ , due to what I believe is a bug in render-markdown)
+(The !rend should show up as a 🏳️ , but doesn't, due to what I believe is a bug in render-markdown)
 
 ### Vault Server
 
