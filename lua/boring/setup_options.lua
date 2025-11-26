@@ -22,6 +22,7 @@ return function()
 	vim.api.nvim_set_hl(0, "LineNrBelow", { fg = "#5C6370" })
 	vim.g["clang_format#command"] = "/home/ubuntu/mongo/build/clang-format"
 	vim.o.undofile = true
-	vim.o.undodir = "~/.vim/undo"
+	vim.o.undodir = "/home/ubuntu/.vimswap//undo"
+	vim.o.backupdir = "/home/ubuntu/.vimswap//backup"
 	vim.o.viminfo = "'1000,\"1000,:1000,@1000"
 end

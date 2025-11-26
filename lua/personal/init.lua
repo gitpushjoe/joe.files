@@ -757,7 +757,6 @@ vim.api.nvim_set_keymap(
 	"Surround with **double asterisks**"
 )
 
-
 -- This is my buffer navigation setup.
 -- It is not great.
 
@@ -829,6 +828,8 @@ function _G.print_stack(c)
 			first = false
 
 			local buf_name = vim.fn.fnamemodify(vim.fn.bufname(buf_id), ":t")
+
+			buf_name = #buf_name > 32 and buf_name:sub(0, 29) .. ".." or buf_name
 
 			if buf_id ~= vim.api.nvim_get_current_buf() then
 				table.insert(stack_parts, { buf_name, "Comment" })
@@ -988,8 +989,17 @@ function _G.open_recent()
 	end
 end
 
+-- Open config
+vim.api.nvim_set_keymap(
+	"n",
+	"<leader>co",
+	"<cmd>e ~/.config/nvim/init.lua<CR>",
+	{ noremap = true, silent = true },
+	"Open config"
+)
+
 vim.filetype.add({
-  extension = {
-    idl = "yaml",
-  },
+	extension = {
+		idl = "yaml",
+	},
 })

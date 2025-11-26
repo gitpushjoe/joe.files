@@ -3,6 +3,7 @@ local cmp = ls.cmp
 local s = ls.snippet
 local t = ls.text_node
 local i = ls.insert_node
+local d = ls.dynamic_node
 local fn = ls.function_node
 local extras = require("luasnip.extras")
 
@@ -229,17 +230,18 @@ for _, tag in ipairs({ "gls", "ref", "imp", "nte", "def" }) do
 	add("markdown", ("%s\n> [!%s] %%0%%\n> [!%send]\n"):format(tag, tag, tag:sub(1, 1), tag:sub(1, 1)))
 end
 
-add("markdown", "qst\n> [!imp] qst: %%\n> +#qst\n> [!iend]\n")
+add("markdown", "qst\n> [!imp] qst: %%\n> +#$qst\n> [!iend]\n")
 add("markdown", "qsts\n> [!mqsts] \n> [!qsts-mend]\n")
-add("markdown", "tsk\n> [!imp] task: %%\n> +#task\n> [!iend]\n")
-add("markdown", "meet\n> [!ref] meet: %%\n> [!rend]\n")
+add("markdown", "tsk\n> [!imp] task: %%\n> +#$task\n> [!iend]\n")
+add("markdown", "meet\n> [!ref] meet: %%\n> +#$meet\n> [!rend]\n")
 add("markdown", "tsks\n> [!mtsks] \n> [!tsks-mend]\n")
-add("markdown", [[tick
-> [!imp] task: %%
+add("markdown", [[backport
+> [!imp] task: BACKPORT-%%
 
-> [!ref] tick: %rep%
-> [Source]( https://jira.mongodb.org/browse/SERVER-%% )
-> [Branch]( ]] .. require("private").github_ticket_format_str .. [[ )
+> [!ref] tick: BACKPORT-%rep%
+> +#$ticket
+> [Source]( https://jira.mongodb.org/browse/BACKPORT-%% )
+> [Branch]( ]] .. require("private").github_ticket_format_str:gsub("SERVER", "BACKPORT") .. [[ )
 
 > %0%
 > [!rend]
@@ -254,6 +256,13 @@ add("markdown", [[sref
 > %0%
 
 > [!rend]] .. "]")
+
+add("markdown", [[retro
+> [!ref] meet: Replication Team Retro
+> %0%
+
+> [!rend]] .. "]")
+
 add("markdown", "src\n[Source]( %% )\n")
 
 ls.add_snippets("cpp", {
@@ -337,7 +346,9 @@ ls.add_snippets("cpp", {
 	}),
 })
 
-local newline = function() t({ "" }) end 
+local newline = function()
+	t({ "" })
+end
 
 require("luasnip").filetype_extend("javascriptreact", { "typescriptreact" })
 ls.add_snippets("typescriptreact", {
@@ -376,49 +387,117 @@ ls.add_snippets("cpp", {
 	}),
 })
 
-local function get_today()
-	local week_idx =
-		math.floor((tonumber(os.date("%s")) - tonumber(os.time({ year = 2025, month = 2, day = 3 }))) / 604800)
-	local day_idx = tonumber(os.date("%u")) - 1
-	local week_base = math.floor(week_idx / 3) * 16
-	local week_mod3 = week_idx % 3
-	local today = week_base + day_idx + week_mod3 * 5
-	return ("%03x"):format(today)
-end
-
 ls.add_snippets("all", {
 	s("day-", {
 		t("day-"),
-		fn(get_today),
+		fn(require("get_today")),
 	}),
 })
 
 ls.add_snippets("all", {
 	s("today", {
-		fn(get_today),
+		fn(require("get_today")),
 	}),
 })
 
 ls.add_snippets("markdown", {
 	s("com", {
-		t("  - complete"),
+		t("  - $complete"),
 		t({ "", "" }),
 		t("  - day-"),
-		fn(get_today),
+		fn(require("get_today")),
 	}),
 })
 
 ls.add_snippets("markdown", {
 	s("ans", {
-		t("  - answered"),
+		t("  - $answered"),
 		t({ "", "" }),
 		t("  - day-"),
-		fn(get_today),
+		fn(require("get_today")),
 	}),
 })
 
 ls.add_snippets("cpp", {
 	s("mod", {
 		t('#include "mongo/util/modules.h"'),
+	}),
+})
+
+---@param ticket_id string
+local function query_jira_ticket(ticket_id)
+	local phandle = assert(
+		io.popen(
+			("curl https://jira.mongodb.org/rest/api/2/issue/%s  -H \"Authorization: Bearer $(cat ~/.jira-token.txt)\" 2>/dev/null | jq -r '.fields.summary, .fields.description'"):format(
+				ticket_id
+			)
+		)
+	)
+	---@type string text
+	local text = phandle:read("*a"):gsub("%s*$", ""):gsub("\r\n", "\n")
+	local newline_idx = text:find("\n")
+	local summary = text:sub(0, newline_idx)
+	summary = summary == "null" and "" or summary
+	summary = summary:gsub("[%[%]]", "")
+	local description = text:sub(newline_idx + 1)
+	description = require("jira_md_translator").jira_to_md(description)
+	phandle:close()
+	return summary, description
+end
+
+ls.add_snippets("markdown", {
+	s("tick", {
+		t("> [!imp] task: "),
+		i(1),
+		fn(function(args)
+			if args[1][1] == "" then
+				return " <- enter ticket ID"
+			end
+			local id = args[1][1]
+			id = id:find("-") ~= nil and id or "SERVER-" .. id
+			local summary, description = query_jira_ticket(id)
+			local text = " " .. summary
+			text = text .. ("\n\n> [!ref] tick: %s %s\n> +#$pin\n> +#$ticket"):format(id, summary)
+			text = text .. ("\n> [Source]( https://jira.mongodb.org/browse/%s )"):format(id)
+			text = text
+				.. ("\n> [Branch]( %s%s )"):format(
+					require("private").github_ticket_format_str:sub(
+						0,
+						require("private").github_ticket_format_str:find("SERVER") - 1
+					),
+					id
+				)
+			text = text .. ("\n\n> %s"):format(description:gsub("\n\n\n", "\n\n"):gsub("\n", "\n> "))
+			text = text .. "\n> [!rend]\n\n> [!iend]\n"
+			return vim.fn.split(text, "\n")
+		end, { 1 }),
+	}),
+})
+
+ls.add_snippets("markdown", {
+	s("jira", {
+		t("> [!ref] tick: "),
+		i(1),
+		fn(function(args)
+			if args[1][1] == "" then
+				return " <- enter ticket ID"
+			end
+			local id = args[1][1]
+			id = id:find("-") ~= nil and id or "SERVER-" .. id
+			local summary, description = query_jira_ticket(id)
+			local text = " " .. summary
+			text = text .. ("\n> +#$ticket\n> [Source]( https://jira.mongodb.org/browse/%s )"):format(id)
+			text = text
+				.. ("\n> [Branch]( %s%s )"):format(
+					require("private").github_ticket_format_str:sub(
+						0,
+						require("private").github_ticket_format_str:find("SERVER") - 1
+					),
+					id
+				)
+			text = text .. ("\n\n> %s"):format(description:gsub("\n\n\n", "\n\n"):gsub("\n", "\n> "))
+			text = text .. "\n> [!rend]"
+			return vim.fn.split(text, "\n")
+		end, { 1 }),
 	}),
 })

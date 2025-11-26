@@ -3,18 +3,8 @@ local get_stats = require("crazywall-setup.get_stats")
 local cw = require("crazywall")
 local Path = require("core.path")
 
--- Returns the id for today.
-local function get_today()
-	local week_idx =
-		math.floor((tonumber(os.date("%s")) - tonumber(os.time({ year = 2025, month = 2, day = 3 }))) / 604800)
-	local day_idx = tonumber(os.date("%u")) - 1
-	local week_base = math.floor(week_idx / 3) * 16
-	local week_mod3 = week_idx % 3
-	local today = week_base + day_idx + week_mod3 * 5
-	return ("%03x"):format(today)
-end
-
-local day = get_today()
+local get_today = require("get_today")
+local day = get_today():gsub("\n", "")
 
 -- Hash set containing tags that should be added to notes by default.
 ---@type table<string, 1>
@@ -23,7 +13,14 @@ local default_tags = {
 	[("day-%s"):format(day)] = 1,
 }
 
+-- Maps each section of the note to its tags.
 local tag_map = {}
+
+---@param tag string
+---@return boolean
+local tag_is_inherited = function(tag)
+	return tag:sub(1, 1) ~= "$"
+end
 
 -- Example usage:
 -- [!mqsts]
@@ -69,6 +66,9 @@ local execute_macro = function(macro, name, today)
 ]]):format(name, output, name):sub(1, -2)
 end
 
+-- Example:
+-- `#ticket 18 * r....tick:`
+-- ^ queries for all `r` notes with ticket tag in the last 18 days that start with "tick:"
 local execute_query = function(query)
 	local query_parts = vim.fn.split(query, " ")
 	local tags = query_parts[1]:sub(2, #query_parts[1])
@@ -100,6 +100,47 @@ local execute_query = function(query)
 ]]):format(query, vim.fn.join(retained_lines, "\n")):sub(1, -2)
 end
 
+local get_jira_comments = function(ticket_id)
+	local eoc = '"<END OF COMMENT>"'
+	local cmd = (
+		"curl https://jira.mongodb.org/rest/api/2/issue/%s  "
+		.. '-H "Authorization: Bearer $(cat ~/.jira-token.txt)" 2>/dev/null'
+		.. " | "
+		.. "jq -r '.fields.comment.comments | reverse[] | (.author.displayName, .self, .created, .body, %s)'"
+	):format(ticket_id, eoc)
+	local phandle = assert(io.popen(cmd))
+	local text = phandle:read("*a")
+	phandle:close()
+	local lines = vim.split(text, "\n")
+	local i = 1
+	local res = ""
+	while i < #lines do
+		local display_name = lines[i]
+		i = i + 1
+		local url = lines[i]
+		i = i + 1
+		local creation_date = lines[i]
+		i = i + 1
+		creation_date = creation_date:gsub("T", " "):gsub("%+0+", " ")
+		local body = ""
+		while lines[i] ~= eoc:sub(2, #eoc - 1) do
+			body = body .. lines[i]:gsub("[\n\r]", "") .. "\n"
+			i = i + 1
+		end
+		body = ">" .. require("jira_md_translator").jira_to_md(body):gsub("\n*$", ""):gsub("\r*\n", "\n> ")
+		local comment_text = ("**[%s]**'s [comment](%s)\n@ %s\n%s"):format(display_name, url, creation_date, body)
+		res = res .. comment_text .. "\n" .. "\n"
+		i = i + 1
+	end
+	return ([[
+> [!comments] %s
+> 
+%s
+> 
+> [!cend]
+]]):format(ticket_id, res)
+end
+
 local reset = function(ctx)
 	default_tags = {}
 	day = get_today():gsub("\n", "")
@@ -119,7 +160,10 @@ local reset = function(ctx)
 		if not match then
 			break
 		end
-		default_tags[match] = 1
+		-- Tags that begin with a "$" aren't carried down to child notes
+		if tag_is_inherited(match) then
+			default_tags[match] = 1
+		end
 		i = i + 1
 	end
 end
@@ -133,19 +177,27 @@ local config = {
 		{ "nte", "> [!nte] ", "> [!nend]" },
 		{ "def", "> [!def] ", "> [!dend]" },
 		{ "query", "> [!query] ", "> [!qend]" },
+		{ "comments", "> [!comments] ", "> [!cend]" },
 		{ "macro", "> [!m", "mend]" },
 	},
 
 	resolve_path = function(section, ctx)
-		if section.id == 1 then
+		local is_first_note = section.id == 1
+		if is_first_note then
 			reset(ctx)
 		end
-		if section:type_name_is("macro") or section:type_name_is("query") then
+		local shouldnt_export_to_file = (
+			section:type_name_is("macro")
+			or section:type_name_is("query")
+			or section:type_name_is("comments")
+		)
+		if shouldnt_export_to_file then
 			return require("core.path").void()
 		end
 		local type_name = section.type[1]
 		local first_line = section:get_lines()[1]
 		tag_map[section.id] = {}
+		-- Can specify tags in the title of the note, i.e. "meet: #All-Hands Meeting"
 		first_line = first_line:gsub("#(%w[%w@_-]*)", function(tag)
 			tag_map[section.id][tag:lower()] = 1
 			return tag:gsub("-", " ")
@@ -158,10 +210,16 @@ local config = {
 
 	transform_lines = function(section)
 		local section_lines = section:get_lines()
-		if section:type_name_is("macro") or section:type_name_is("query") then
+		local shouldnt_export_to_file = (
+			section:type_name_is("macro")
+			or section:type_name_is("query")
+			or section:type_name_is("comments")
+		)
+		if shouldnt_export_to_file then
 			return {}
 		end
 		local lines = { "---" }
+		-- Can specify tags by creating a line with `> +#this_syntax`
 		for _, line in ipairs(section_lines) do
 			local match = string.match(line, "^> %+#(.*)$")
 			if match then
@@ -173,6 +231,8 @@ local config = {
 		table.insert(lines, "created: " .. os.date("%Y-%m-%d"))
 		table.insert(lines, "tags:")
 		local curr = section
+		-- Hash set of the tags for this node.
+		---@type table<string, 1> tags
 		local tags = default_tags
 		while curr do
 			if not tag_map[curr.id] then
@@ -180,10 +240,12 @@ local config = {
 			end
 			for tag in pairs(tag_map[curr.id]) do
 				if
-					not (tag == "pin" and curr ~= section)
-					and tag ~= "offsite"
-					and tag ~= "bond"
-					and tag ~= "james-bond"
+					not (
+						(curr ~= section and not tag_is_inherited(tag))
+						or tag == "offsite"
+						or tag == "bond"
+						or tag == "james-bond"
+					)
 				then
 					tags[tag] = 1
 				end
@@ -221,6 +283,12 @@ local config = {
 		if section:type_name_is("query") then
 			local query = section:get_lines()[1]
 			return execute_query(query)
+		end
+		if section:type_name_is("comments") then
+			local line = section:get_lines()[1]
+			local parts = vim.fn.split(line, " ")
+			local ticket_id = parts[#parts]
+			return get_jira_comments(ticket_id)
 		end
 		return ("[[%s]]"):format(section.path:get_filename():gsub(".md$", ""))
 	end,
@@ -292,7 +360,7 @@ function _G.obsidian_up()
 		local res = {}
 		for _, note in ipairs(backlinks) do
 			local id = note.path.filename:sub(24)
-			id = string.gsub(id, '\\', '\\\\')
+			id = string.gsub(id, "\\", "\\\\")
 			if id:sub(1, 1) ~= "g" then
 				table.insert(res, note)
 			end
