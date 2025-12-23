@@ -190,6 +190,7 @@ return {
 	-- 	},
 	-- },
 
+	-- Keeping telescope because I CBA to implement "search my keymaps" in Fzf
 	{
 		"nvim-telescope/telescope.nvim",
 		branch = "0.1.x",
@@ -209,99 +210,6 @@ return {
 			},
 		},
 		config = function()
-			local function ivy(thing, opts)
-				opts = opts or {}
-				return function()
-					thing(require("telescope.themes").get_ivy(opts))
-				end
-			end
-
-			local function dropdown(thing)
-				return function()
-					thing(require("telescope.themes").get_dropdown({}))
-				end
-			end
-
-			vim.keymap.set("n", "<leader><Tab>", require("telescope.builtin").oldfiles, { desc = "Browse oldfiles " }) --personal remap
-			vim.keymap.set(
-				"n",
-				"<leader><space>",
-				require("telescope.builtin").buffers,
-				{ desc = "[ ] Find existing buffers" }
-			)
-			function LeaderSlash()
-				require("telescope.builtin").current_buffer_fuzzy_find(require("telescope.themes").get_dropdown({
-					winblend = 10,
-					previewer = false,
-				}))
-			end
-
-			vim.keymap.set("n", "<leader>/", LeaderSlash, { desc = "[/] Fuzzily search in current buffer" })
-			vim.keymap.set("i", "<C-F>", LeaderSlash, { noremap = true }, "Search in current buffer")
-			vim.keymap.set("n", "<C-F>", LeaderSlash, { noremap = true }, "Search in current buffer")
-
-			-- vim.keymap.set("n", "<leader>?", require("telescope.builtin").oldfiles, { desc = "[?] Find recently opened files" })
-			-- vim.keymap.set("n", "<leader>gf", require("telescope.builtin").git_files, { desc = "Search [G]it [F]iles" })
-
-			vim.keymap.set("n", "<leader>sh", require("telescope.builtin").help_tags, { desc = "[S]earch [H]elp" })
-			vim.keymap.set(
-				"n",
-				"<leader>st",
-				ivy(require("telescope.builtin").grep_string),
-				{ desc = "[S]earch [T]his word" }
-			)
-
-			vim.keymap.set(
-				"n",
-				"<leader>sf",
-				dropdown(require("telescope.builtin").find_files),
-				{ desc = "[S]earch [F]iles" }
-			)
-			vim.keymap.set(
-				"n",
-				"<leader>sg",
-				dropdown(require("telescope.builtin").live_grep),
-				{ desc = "[S]earch by [G]rep" }
-			)
-
-			vim.keymap.set("n", "<leader>sj", function()
-				ivy(require("telescope.builtin").live_grep, {
-					search_dirs = vim.fn.systemlist("git diff --name-only $(git merge-base HEAD @{upstream})"),
-					prompt_title = "Live Grep (Modified Files)",
-				})()
-			end, { desc = "[S]earch by Grep (Modified Files)" })
-
-			vim.keymap.set("n", "<leader>sk", function()
-				ivy(require("telescope.builtin").find_files, {
-					search_dirs = vim.fn.systemlist("git diff --name-only $(git merge-base HEAD @{upstream})"),
-					prompt_title = "Find Files (Modified Files)",
-				})()
-			end, { desc = "[S]earch [F]iles (Modified Files)" })
-
-			vim.keymap.set(
-				"n",
-				"<leader>sd",
-				require("telescope.builtin").diagnostics,
-				{ desc = "[S]earch [D]iagnostics" }
-			)
-			vim.keymap.set("n", "<leader>sr", require("telescope.builtin").resume, { desc = "[S]earch [R]esume" })
-
-			require("telescope").setup({
-				defaults = {
-					mappings = {
-						i = {
-							["<C-u>"] = false,
-							["<C-d>"] = false,
-						},
-					},
-				},
-			})
-
-			vim.keymap.set("n", "<Tab>", function()
-				require("telescope.builtin").find_files({
-					cwd = require("telescope.utils").buffer_dir(),
-				})
-			end, { desc = "Explore files in current dir" })
 
 			local pickers = require("telescope.pickers")
 			local finders = require("telescope.finders")
@@ -360,6 +268,80 @@ return {
 			vim.keymap.set("n", "<leader>smk", ":lua search_keymaps()<CR>", { desc = "Search My Keymaps" })
 
 			pcall(require("telescope").load_extension, "fzf")
+		end,
+	},
+
+	{
+		"ibhagwan/fzf-lua",
+		-- optional for icon support
+		dependencies = { "nvim-tree/nvim-web-devicons" },
+		config = function()
+			require("fzf-lua").setup({
+				fzf_opts = {
+					["--cycle"] = true,
+					-- ["--bind"] = table.concat({
+					-- 	"esc:abort", -- <Esc> closes picker
+					-- 	"ctrl-j:down", -- Move down
+					-- 	"ctrl-k:up", -- Move up
+					-- 	"ctrl-h:half-page-down",
+					-- 	"ctrl-l:half-page-up",
+					-- }, ","),
+				},
+				files = {
+					fd_opts = [[--color=never --hidden --type f --type l --exclude .git --exclude src/third_party --exclude "*.spec"]],
+					rg_opts = [[--color=never --hidden --files -g "!.git" -g "!src/third_party"]],
+				},
+				grep = {
+					fd_opts = [[--color=never --hidden --type f --type l --exclude .git --exclude **third_party*]],
+					rg_opts = [[ --glob "!src/third_party/**" --glob "!jstests/with_mongot/**" --glob "!**.spec" --glob "!**.json" --glob "!src/mongo/crypto/test_vectors/**" --glob "!src/mongo/db/pipeline/**_test.cpp" --glob "!poetry.lock" --glob "!**.inl" --glob "!**.pem" --column --line-number --no-heading --color=always --smart-case --max-columns=4096 -e]],
+				},
+			})
+			vim.keymap.set("n", "<leader><Tab>", FzfLua.oldfiles, { desc = "Browse oldfiles" })
+			vim.keymap.set("n", "<leader><space>", FzfLua.buffers, { desc = "Find existing buffers" })
+
+			vim.keymap.set({ "n", "i" }, "<C-f>", FzfLua.grep_curbuf, { desc = "Search in current buffer" })
+			vim.keymap.set("n", "<leader>st", FzfLua.grep_cWORD, { desc = "Search this word" })
+			vim.keymap.set("n", "<leader>sr", FzfLua.resume, { desc = "[S]earch [R]esume" })
+			vim.keymap.set("n", "<leader>sg", FzfLua.live_grep, { desc = "Live grep" })
+			vim.keymap.set("n", "<leader>sf", FzfLua.files, { desc = "Find files" })
+			vim.keymap.set("n", "<leader>sd", FzfLua.help_tags, { desc = "Search help" })
+			vim.keymap.set("n", "<leader>st", FzfLua.grep_cword, { desc = "Search help" })
+			vim.keymap.set("n", "<leader>sd", FzfLua.lsp_document_diagnostics)
+
+			local git_modified_cmd = "git diff --name-only $(git merge-base HEAD @{upstream}) 2>/dev/null"
+
+			-- TODO: this doesnt do what i want
+			vim.keymap.set("n", "<leader>sj", function()
+				require("fzf-lua").fzf_exec(git_modified_cmd, {
+					prompt = "Live Grep (Modified Files)> ",
+					actions = {
+						["default"] = function(selected)
+							require("fzf-lua").live_grep({
+								files = selected,
+							})
+						end,
+					},
+				})
+			end, { desc = "[S]earch by Grep (Modified Files)" })
+
+			vim.keymap.set("n", "<leader>sk", function()
+				require("fzf-lua").fzf_exec(git_modified_cmd, {
+					prompt = "Find Files (Modified Files)> ",
+					actions = {
+						["default"] = function(selected)
+							require("fzf-lua").files({
+								files = selected,
+							})
+						end,
+					},
+				})
+			end, { desc = "[S]earch [F]iles (Modified Files)" })
+
+			vim.keymap.set("n", "<Tab>", function()
+				require("fzf-lua").files({
+					cwd = vim.fn.expand("%:p:h"),
+				})
+			end, { desc = "Explore files in current dir" })
 		end,
 	},
 
@@ -920,5 +902,15 @@ return {
 
 			hooks.register(hooks.type.SCOPE_HIGHLIGHT, hooks.builtin.scope_highlight_from_extmark)
 		end,
+	},
+
+	{
+		"ThePrimeagen/vim-be-good",
+	},
+
+	{
+		"Aasim-A/scrollEOF.nvim",
+		event = { "CursorMoved", "WinScrolled" },
+		opts = {},
 	},
 }

@@ -465,8 +465,8 @@ end, { noremap = true, silent = true }, "Yank line {count} lines up")
 vim.api.nvim_set_keymap(
 	"n",
 	"<leader>l",
-	"<cmd>Telescope buffers<CR>",
-	{ noremap = true, silent = true },
+	"",
+	{ noremap = true, silent = true, callback = FzfLua.buffers },
 	"View open buffers"
 )
 
