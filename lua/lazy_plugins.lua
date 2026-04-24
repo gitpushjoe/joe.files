@@ -79,6 +79,7 @@ return {
 				conceal_delimiters = false,
 				sign = false,
 				border = "thick",
+				disable_background = { 'yaml' },
 				language_name = false, -- TODO: remove
 				language_icon = false, -- TODO: remove
 			},
@@ -339,14 +340,16 @@ return {
 	{
 		-- Highlight, edit, and navigate code
 		"nvim-treesitter/nvim-treesitter",
+		lazy = False,
 		dependencies = {
 			"nvim-treesitter/nvim-treesitter-textobjects",
 		},
-		opts = function(_, opts)
-			if type(opts.ensure_installed) == "table" then
-				vim.list_extend(opts.ensure_installed, { "c", "cpp" })
-			end
-		end,
+		-- opts = function(_, opts)
+		-- 	if type(opts.ensure_installed) == "table" then
+		-- 		vim.list_extend(opts.ensure_installed, { "c", "cpp", "sh" })
+		-- 	end
+		-- end,
+		  install_dir = vim.fn.stdpath('data') .. '/site',
 		config = require("boring.setup_treesitter")(),
 		build = ":TSUpdate",
 	},
@@ -369,10 +372,6 @@ return {
 			require("obsidian").setup({
 				nvim_cmp = false,
 				legacy_commands = false,
-				follow_url_func = function(url)
-					-- Open the URL in the default web browser.
-					-- vim.fn.jobstart({ "xdg-open", url }) -- linux
-				end,
 				ui = { enable = false },
 				workspaces = {
 					{

@@ -1,7 +1,7 @@
 return function ()
 	-- [[ Configure Treesitter ]]
 	vim.defer_fn(function()
-		require("nvim-treesitter.configs").setup({
+		require("nvim-treesitter.config").setup({
 			ensure_installed = {
 				"c",
 				"cpp",
@@ -74,5 +74,23 @@ return function ()
 				},
 			},
 		})
+		require("nvim-treesitter").install({
+				"c",
+				"cpp",
+				"go",
+				"lua",
+				"python",
+				"rust",
+				"tsx",
+				"javascript",
+				"typescript",
+				"vimdoc",
+				"vim",
+				"bash",
+				"css",
+				"markdown",
+				"yaml",
+				"yml"
+			})
 	end, 0)
 end
