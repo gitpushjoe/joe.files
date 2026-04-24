@@ -1047,3 +1047,22 @@ vim.api.nvim_create_autocmd("SwapExists", {
 --     end
 --   end,
 -- })
+--
+vim.api.nvim_create_user_command('Python', function(opts)
+  local input = opts.args
+  -- Split on last ';' (if any)
+  local before, expr = input:match("^(.*);(.*)$")
+
+  local code
+  if expr then
+    before = before:gsub("%s+$", "")
+    expr = expr:gsub("^%s+", "")
+    code = string.format("%s; print(%s)", before, expr)
+  else
+    expr = vim.trim(input)
+    code = string.format("print(%s)", expr)
+  end
+
+  local cmd = "python3 -c " .. vim.fn.shellescape(code)
+  vim.cmd("!" .. cmd)
+end, { nargs = "+" })
