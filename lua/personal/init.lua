@@ -1,3 +1,5 @@
+local exec = require("util").exec
+
 vim.opt.clipboard:append("unnamedplus")
 vim.api.nvim_exec(
 	[[
@@ -10,9 +12,15 @@ augroup END
 )
 
 -- vim.g.clipboard = {
---     name = 'clip',
---     copy = { ['+'] = 'clip.exe', ['*'] = 'clip.exe' },
---     paste = { ['+'] = 'clip.exe', ['*'] = 'clip.exe' },
+--    name= 'xclip',
+--    copy= {
+--       ['+']= '/usr/bin/xclip -selection clipboard',
+--       ['*']= '/usr/bin/xclip -selection primary',
+--     },
+--    paste= {
+--       ['+']= '/usr/bin/xclip -selection clipboard -o',
+--       ['*']= '/usr/bin/xclip -selection primary -o',
+--     },
 --     cache_enabled = 0,
 -- }
 
@@ -235,13 +243,13 @@ vim.api.nvim_set_keymap("n", "<C-left>", "<C-W>q", { noremap = true, silent = tr
 function _G.format_file()
 	local filetype = vim.bo.filetype
 	if filetype == "cpp" or filetype == "c" then
-		vim.cmd("ClangFormat")
+		vim.cmd("Format")
 	elseif filetype == "typescript" or filetype == "javascript" or filetype == "json" then
 		vim.cmd("w | !cd ~/mongo/jstests; prettier --write %:p")
 	elseif filetype == "lua" then
 		require("stylua-nvim").format_file()
 	elseif filetype == "py" or filetype == "python" then
-		vim.cmd("FormatWriteLock")
+		vim.cmd("w | silent !./python3-venv/bin/ruff format %")
 	else
 		vim.cmd("Format")
 	end
@@ -656,9 +664,7 @@ function _G.GetLinkVis()
 	local start_line = vim.api.nvim_buf_get_mark(0, "<")[1]
 	local end_line = vim.api.nvim_buf_get_mark(0, ">")[1]
 	local path = vim.fn.expand("%")
-	local phandle = assert(io.popen("echo -n $(cd ~/mongo && git rev-parse HEAD)"))
-	local branch = phandle:read("*a")
-	phandle:close()
+	local branch = exec("echo -n $(cd ~/mongo && git rev-parse HEAD)")
 	local link = ("https://github.com/10gen/mongo/blob/%s/%s#L%s-L%s"):format(branch, path, start_line, end_line)
 	vim.fn.setreg("+", link)
 	vim.notify("Copied link!")
@@ -942,6 +948,9 @@ vim.api.nvim_set_keymap("t", "<A-[>", "<cmd>lua bnext()<CR>", { noremap = true, 
 vim.api.nvim_set_keymap("t", "<A-]>", "<cmd>lua bprev()<CR>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("t", "<A-\\>", "<Esc>:lua print_stack()<CR>", { noremap = true, silent = true })
 
+vim.api.nvim_set_keymap("n", "<leader>[", "<Esc>:bprev<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<leader>]", "<Esc>:bnext<CR>", { noremap = true, silent = true })
+
 function _G.get_path()
 	local path = vim.fn.expand("%")
 	vim.fn.setreg("+", path)
@@ -963,6 +972,14 @@ vim.api.nvim_set_keymap(
 
 vim.api.nvim_set_keymap("n", "dv", "<Esc>:DiffviewOpen<CR>", { noremap = true, silent = true }, "DiffviewOpen")
 vim.api.nvim_set_keymap("n", "dc", "<Esc>:DiffviewClose<CR>", { noremap = true, silent = true }, "DiffviewClose")
+
+vim.api.nvim_set_keymap(
+	"n",
+	"<leader>dv",
+	"<Esc>:DiffviewOpen origin/master<CR>",
+	{ noremap = true, silent = true },
+	"DiffviewOpen"
+)
 
 -- Diagnostic keymaps
 vim.keymap.set("n", "[d", function()
@@ -992,7 +1009,16 @@ end
 -- Open config
 vim.api.nvim_set_keymap(
 	"n",
-	"<leader>co",
+	"<leader>cf",
+	"<cmd>e ~/.config/nvim/init.lua<CR>",
+	{ noremap = true, silent = true },
+	"Open config"
+)
+
+-- Open config
+vim.api.nvim_set_keymap(
+	"n",
+	"<leader>cn",
 	"<cmd>e ~/.config/nvim/init.lua<CR>",
 	{ noremap = true, silent = true },
 	"Open config"
@@ -1003,3 +1029,21 @@ vim.filetype.add({
 		idl = "yaml",
 	},
 })
+
+vim.api.nvim_create_autocmd("SwapExists", {
+	pattern = "*",
+	callback = function()
+		vim.cmd('silent set shortmess=A')
+		vim.v.swapchoice = "o" -- 'o' = open read-only
+	end,
+})
+--
+-- vim.api.nvim_create_autocmd("BufWritePost", {
+--   callback = function(args)
+--     local swap = vim.fn.swapname(args.file)
+-- 	vim.notify(vim.inspect(vim.fn.filereadable(swap)))
+--     if swap ~= "" and vim.fn.filereadable(swap) == 1 then
+--       vim.fn.delete(swap)
+--     end
+--   end,
+-- })

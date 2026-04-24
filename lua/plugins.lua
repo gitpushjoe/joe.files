@@ -42,14 +42,12 @@ local function setup_transparent()
 	})
 end
 
-
 local function setup_idkwhatthisis()
 	vim.g.loaded_netrw = 1
 	vim.g.loaded_netrwPlugin = 1
 end
 
 vim.wo.relativenumber = true
-
 
 require("pckr").add({
 
@@ -67,7 +65,7 @@ require("pckr").add({
 
 	{
 		"gitpushjoe/zuzu.nvim",
-		branch = "main",
+		branch = "β0.4.0",
 		config = function()
 			local split_terminal = function(modifiers, terminal_mode_reopen)
 				if terminal_mode_reopen == nil then
@@ -98,10 +96,10 @@ require("pckr").add({
 			require("zuzu").setup({
 				reflect = true,
 				compilers = {
-					{
-						"node",
-						[[%E%m@%f:%l:%c,%Z%.%#Error: %m]],
-					},
+					node = [[%E%m@%f:%l:%c,%Z%.%#Error: %m]],
+					python3 = '%A %#File "%f"\\, line %l\\, in %o,%Z %#%m',
+					lua = "%E%\\\\?lua:%f:%l:%m,%E%f:%l:%m",
+					bash = "%E%f: line %l: %m",
 				},
 				colors = {
 					reflect = require("zuzu.colors").bright_purple,
@@ -115,7 +113,10 @@ require("pckr").add({
 						--- Delay between each elapsed time update in milliseconds
 						math.floor(1000 / 3)
 					),
+					require("zuzu.display_strategies").current(true),
 				},
+				notify = require("zuzu.notify")(),
+				display_strategy_count = 5,
 			})
 		end,
 	},
@@ -127,7 +128,6 @@ require("pckr").add({
 			require("crazywall-setup")
 		end,
 	},
-
 })
 
 setup_idkwhatthisis()
@@ -172,7 +172,6 @@ vim.api.nvim_set_hl(0, "NavicText", { default = true, bg = "#000000", fg = "#fff
 vim.api.nvim_set_hl(0, "NavicSeparator", { default = true, bg = "#000000", fg = "#ffffff" })
 
 vim.o.winbar = "%{%v:lua.require'nvim-navic'.get_location()%}"
-vim.cmd('highlight LineNr guifg=gold cterm=bold')
-vim.cmd('highlight LineNrAbove guifg=gray')
-vim.cmd('highlight LineNrBelow guifg=gray')
-
+vim.cmd("highlight LineNr guifg=gold cterm=bold")
+vim.cmd("highlight LineNrAbove guifg=gray")
+vim.cmd("highlight LineNrBelow guifg=gray")

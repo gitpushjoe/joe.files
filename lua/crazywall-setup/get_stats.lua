@@ -1,3 +1,5 @@
+local util = require("util")
+
 -- Returns the stats for the last three week period (e.g. days 050-05e) comparing it to the three-week period before it.
 ---@param period integer
 return function(period)
@@ -11,10 +13,7 @@ return function(period)
 	end
 
 	local function count_imp_files(p, prefix)
-		local phandle = assert(io.popen(("find /home/ubuntu/vault/imp -name 'i%02x??%s*' | wc -l"):format(p, prefix)))
-		local result = phandle:read("*a")
-		phandle:close()
-		return tonumber(result) or 0
+		return tonumber(util.exec(("find /home/ubuntu/vault/imp -name 'i%02x??%s*' | wc -l"):format(p, prefix))) or 0
 	end
 
 	local res = "> [!mstat]"
@@ -37,27 +36,24 @@ return function(period)
 		local data = {}
 		for i = 0, 14 do
 			data[i] = (function()
-				local file = ("/home/ubuntu/vault/gls/g%02x%x.md"):format(p, i)
-				local handle = io.open(file, "r")
-				if not handle then
-					return data[i - 1]
-				end
-				local gen = handle:lines()
-				local line = gen()
-				local counts = {}
-				while line do
-					while line and not line:match("> .*:") do
+				return util.with(io.open(("/home/ubuntu/vault/gls/g%02x%x.md"):format(p, i), "r"), function(handle)
+					local gen = handle:lines()
+					local line = gen()
+					local counts = {}
+					while line do
+						while line and not line:match("> .*:") do
+							line = gen()
+						end
+						table.insert(counts, 0)
 						line = gen()
+						while line and line ~= "> " do
+							counts[#counts] = counts[#counts] + 1
+							line = gen()
+						end
 					end
-					table.insert(counts, 0)
-					line = gen()
-					while line and line ~= "> " do
-						counts[#counts] = counts[#counts] + 1
-						line = gen()
-					end
-				end
-				counts[#counts] = nil
-				return counts
+					counts[#counts] = nil
+					return counts
+				end, data[i - 1])
 			end)()
 		end
 		return data

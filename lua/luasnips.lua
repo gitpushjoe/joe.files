@@ -6,6 +6,7 @@ local i = ls.insert_node
 local d = ls.dynamic_node
 local fn = ls.function_node
 local extras = require("luasnip.extras")
+local util = require("util")
 
 local rep = extras.rep
 
@@ -235,6 +236,8 @@ add("markdown", "qsts\n> [!mqsts] \n> [!qsts-mend]\n")
 add("markdown", "tsk\n> [!imp] task: %%\n> +#$task\n> [!iend]\n")
 add("markdown", "meet\n> [!ref] meet: %%\n> +#$meet\n> [!rend]\n")
 add("markdown", "tsks\n> [!mtsks] \n> [!tsks-mend]\n")
+add("markdown", "comm\n> [!comments] %%\n> [!cend]\n")
+add("markdown", "cnv\n> [!convert] to %%\n> [!cnvend]\n")
 add("markdown", [[backport
 > [!imp] task: BACKPORT-%%
 
@@ -424,24 +427,29 @@ ls.add_snippets("cpp", {
 	}),
 })
 
+ls.add_snippets("javascript", {
+	s("pj", {
+		t("printjson({ mydebug: "),
+		i(0),
+		t(" });"),
+	}),
+})
+
 ---@param ticket_id string
 local function query_jira_ticket(ticket_id)
-	local phandle = assert(
-		io.popen(
-			("curl https://jira.mongodb.org/rest/api/2/issue/%s  -H \"Authorization: Bearer $(cat ~/.jira-token.txt)\" 2>/dev/null | jq -r '.fields.summary, .fields.description'"):format(
-				ticket_id
-			)
+	local text = util.exec(
+		("curl https://jira.mongodb.org/rest/api/2/issue/%s  -H \"Authorization: Bearer $(cat ~/.jira-token.txt)\" 2>/dev/null | jq -r '.fields.summary, .fields.description'"):format(
+			ticket_id
 		)
 	)
-	---@type string text
-	local text = phandle:read("*a"):gsub("%s*$", ""):gsub("\r\n", "\n")
+		:gsub("%s*$", "")
+		:gsub("\r\n", "\n")
 	local newline_idx = text:find("\n")
 	local summary = text:sub(0, newline_idx)
 	summary = summary == "null" and "" or summary
 	summary = summary:gsub("[%[%]]", "")
 	local description = text:sub(newline_idx + 1)
 	description = require("jira_md_translator").jira_to_md(description)
-	phandle:close()
 	return summary, description
 end
 

@@ -1,3 +1,4 @@
+local util = require("util")
 return {
 	"tpope/vim-fugitive",
 	"tpope/vim-rhubarb",
@@ -11,7 +12,6 @@ return {
 			"folke/lazydev.nvim",
 		},
 	},
-
 	{
 		-- Autocompletion
 		"hrsh7th/nvim-cmp",
@@ -19,12 +19,10 @@ return {
 			-- Snippet Engine & its associated nvim-cmp source
 			"L3MON4D3/LuaSnip",
 			"saadparwaiz1/cmp_luasnip",
-
 			-- Adds LSP completion capabilities
 			"hrsh7th/cmp-nvim-lsp",
-
 			-- Adds a number of user-friendly snippets
-			"rafamadriz/friendly-snippets",
+			-- "rafamadriz/friendly-snippets",
 		},
 		opts = function(_, opts)
 			opts.sources = {}
@@ -210,7 +208,6 @@ return {
 			},
 		},
 		config = function()
-
 			local pickers = require("telescope.pickers")
 			local finders = require("telescope.finders")
 			local conf = require("telescope.config").values
@@ -277,6 +274,7 @@ return {
 		dependencies = { "nvim-tree/nvim-web-devicons" },
 		config = function()
 			require("fzf-lua").setup({
+				"telescope",
 				fzf_opts = {
 					["--cycle"] = true,
 					-- ["--bind"] = table.concat({
@@ -342,6 +340,10 @@ return {
 					cwd = vim.fn.expand("%:p:h"),
 				})
 			end, { desc = "Explore files in current dir" })
+
+			vim.g.fzf_run = {
+				["<enter>"] = "view",
+			}
 		end,
 	},
 
@@ -501,12 +503,10 @@ return {
 					program = "/home/ubuntu/mongo/build/install/bin/mongod",
 					processId = function()
 						-- local handle = assert(io.popen("echo -n $(pidof mongod)"))
-						local handle = assert(io.popen("ps -ef | grep aarch64 | head -1 | awk '{ print $2 }'"))
-						local result = handle:read("*a")
-						print(result, tonumber(result))
-						handle:close()
-						vim.notify(result)
-						return tonumber(result)
+						local id = tonumber(util.exec("ps -ef | grep aarch64 | head -1 | awk '{ print $2 }'"))
+						print(id)
+						vim.notify(("%d"):format(id))
+						return id
 					end,
 					MIMode = "gdb",
 				},
@@ -643,7 +643,6 @@ return {
 	},
 
 	"nvim-tree/nvim-web-devicons",
-	--
 
 	{
 		"stevearc/oil.nvim",
@@ -677,31 +676,26 @@ return {
 			local empty_string = function()
 				return "   "
 			end
-			_G.mongo_modules = {};
-			(function()
-				local handle = io.open("/tmp/incy_modules_map.txt")
-				if not handle then
-					return
-				end
+			_G.mongo_modules = {}
+			util.with(io.open("/home/ubuntu/modules-list.txt", "r"), function(handle)
 				for line in handle:lines() do
 					local parts = vim.fn.split(line, " -- ")
 					if parts and #parts > 0 then
 						_G.mongo_modules[parts[1]] = parts[2]
 					end
 				end
-				handle:close()
-			end)()
-			function _G.mytest()
+			end)
+			function _G.current_module()
 				local path = vim.fn.expand("%:p")
-				local needle = "/home/ubuntu/mongo/src/mongo"
+				local needle = "/home/ubuntu/mongo"
 				if path:sub(1, #needle) ~= needle then
-					return vim.fn.expand("%:.")
+					return ""
 				end
 				local module = _G.mongo_modules[path:sub(20)]
 				if module then
-					return "(" .. module .. ") " .. vim.fn.expand("%:.")
+					return module
 				end
-				return vim.fn.expand("%:.")
+				return vim.fn.split(util.exec(("about %s --codeowners --simple 2>/dev/null"):format(path)))[2] or ""
 			end
 			require("lualine").setup({
 				options = {
@@ -717,8 +711,8 @@ return {
 					lualine_z = { "location" },
 				},
 				tabline = {
-					-- lualine_x = { { "mytest()", path = 1 } },
 					lualine_x = { { "filename", path = 1 } },
+					lualine_c = { "current_module()" },
 				},
 				winbar = {
 					lualine_x = { "empty_string", "navic" },
@@ -913,4 +907,20 @@ return {
 		event = { "CursorMoved", "WinScrolled" },
 		opts = {},
 	},
+
+	{
+		"MagicDuck/grug-far.nvim",
+		-- Note (lazy loading): grug-far.lua defers all it's requires so it's lazy by default
+		-- additional lazy config to defer loading is not really needed...
+		config = function()
+			-- optional setup call to override plugin options
+			-- alternatively you can set options with vim.g.grug_far = { ... }
+			require("grug-far").setup({
+				-- options, see Configuration section below
+				-- there are no required options atm
+			})
+		end,
+	},
+
+	"nvim-mini/mini.map",
 }

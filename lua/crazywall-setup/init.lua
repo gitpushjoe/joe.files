@@ -2,9 +2,11 @@ local get_stats = require("crazywall-setup.get_stats")
 
 local cw = require("crazywall")
 local Path = require("core.path")
+local translate = require("jira_md_translator")
 
 local get_today = require("get_today")
 local day = get_today():gsub("\n", "")
+local exec = require("util").exec
 
 -- Hash set containing tags that should be added to notes by default.
 ---@type table<string, 1>
@@ -50,9 +52,7 @@ local execute_macro = function(macro, name, today)
 		return get_stats(math.floor(today / 16))
 	end
 	macro = macro:gsub("TTT", ("%03x"):format(today))
-	local phandle = assert(io.popen(("luajit ~/vault-server/client.lua '%s'"):format((macro:gsub("'", "'\"'\"'")))))
-	local output = phandle:read("*a")
-	phandle:close()
+	local output = exec(("luajit ~/vault-server/client.lua '%s'"):format((macro:gsub("'", "'\"'\"'"))))
 	if macro == "rand" then
 		return ([[
 > [!m%s] %s
@@ -69,28 +69,41 @@ end
 -- Example:
 -- `#ticket 18 * r....tick:`
 -- ^ queries for all `r` notes with ticket tag in the last 18 days that start with "tick:"
+-- alternatively, `#ticket d018 * r....tick:`
+-- ^ queries for all `r` notes with ticket tag from day >= 018 that start with "tick:"
 local execute_query = function(query)
 	local query_parts = vim.fn.split(query, " ")
 	local tags = query_parts[1]:sub(2, #query_parts[1])
-	local delta = tonumber(query_parts[2] or "999")
+	local today = tonumber(day, 16)
+	local is_valid = (function()
+		if query_parts[2]:sub(1, 1) == "d" then
+			local specified_day = tonumber(query_parts[2]:sub(2), 16)
+			return function(other_day)
+				return tonumber(other_day, 16) >= specified_day
+			end
+		end
+		local delta = tonumber(query_parts[2] or "999")
+		return function(other_day)
+			return today - tonumber(other_day, 16) <= delta
+		end
+	end)()
 	local categories = query_parts[3] or "*"
 	local prefix = query_parts[4] or "*"
-	local phandle =
-		assert(io.popen(("luajit ~/vault-server/client.lua '%s ; %s > %s > Result:'"):format(categories, prefix, tags)))
-	local output = phandle:read("*a")
+	local output = exec(("luajit ~/vault-server/client.lua '%s ; %s > %s > Result:'"):format(categories, prefix, tags))
 	local lines = vim.fn.split(tostring(output), "\n")
 	table.remove(lines, 1)
-	local today = tonumber(day, 16)
 	local retained_lines = {}
 	for _, line in ipairs(lines) do
 		local that_day = line:sub(6, 8)
 		if that_day and that_day ~= "" then
-			if today - tonumber(that_day, 16) <= delta then
+			if is_valid(that_day) then
 				table.insert(retained_lines, line)
 			end
 		end
 	end
-	phandle:close()
+	table.sort(retained_lines, function(a, b)
+		return tonumber(a:sub(6, 8) or "0", 16) > tonumber(b:sub(6, 8) or "0", 16)
+	end)
 	return ([[
 > [!query] %s
 > 
@@ -102,15 +115,14 @@ end
 
 local get_jira_comments = function(ticket_id)
 	local eoc = '"<END OF COMMENT>"'
-	local cmd = (
-		"curl https://jira.mongodb.org/rest/api/2/issue/%s  "
-		.. '-H "Authorization: Bearer $(cat ~/.jira-token.txt)" 2>/dev/null'
-		.. " | "
-		.. "jq -r '.fields.comment.comments | reverse[] | (.author.displayName, .self, .created, .body, %s)'"
-	):format(ticket_id, eoc)
-	local phandle = assert(io.popen(cmd))
-	local text = phandle:read("*a")
-	phandle:close()
+	local text = exec(
+		(
+			"curl https://jira.mongodb.org/rest/api/2/issue/%s  "
+			.. '-H "Authorization: Bearer $(cat ~/.jira-token.txt)" 2>/dev/null'
+			.. " | "
+			.. "jq -r '.fields.comment.comments | reverse[] | (.author.displayName, .self, .created, .body, %s)'"
+		):format(ticket_id, eoc)
+	)
 	local lines = vim.split(text, "\n")
 	local i = 1
 	local res = ""
@@ -178,6 +190,7 @@ local config = {
 		{ "def", "> [!def] ", "> [!dend]" },
 		{ "query", "> [!query] ", "> [!qend]" },
 		{ "comments", "> [!comments] ", "> [!cend]" },
+		{ "convert", "> [!convert] ", "> [!cnvend]" },
 		{ "macro", "> [!m", "mend]" },
 	},
 
@@ -190,6 +203,7 @@ local config = {
 			section:type_name_is("macro")
 			or section:type_name_is("query")
 			or section:type_name_is("comments")
+			or section:type_name_is("convert")
 		)
 		if shouldnt_export_to_file then
 			return require("core.path").void()
@@ -200,7 +214,7 @@ local config = {
 		-- Can specify tags in the title of the note, i.e. "meet: #All-Hands Meeting"
 		first_line = first_line:gsub("#(%w[%w@_-]*)", function(tag)
 			tag_map[section.id][tag:lower()] = 1
-			return tag:gsub("-", " ")
+			return tag:sub(2, 2) == "#" and tag:sub(2, #tag) or ""
 		end)
 		local filename = ("%s%s %s.md"):format(type_name:sub(1, 1), day, first_line)
 		local path = assert(Path:new("~/vault/"):join(type_name .. "/"))
@@ -214,6 +228,7 @@ local config = {
 			section:type_name_is("macro")
 			or section:type_name_is("query")
 			or section:type_name_is("comments")
+			or section:type_name_is("convert")
 		)
 		if shouldnt_export_to_file then
 			return {}
@@ -289,6 +304,17 @@ local config = {
 			local parts = vim.fn.split(line, " ")
 			local ticket_id = parts[#parts]
 			return get_jira_comments(ticket_id)
+		end
+		if section:type_name_is("convert") then
+			local lines = section:get_lines()
+			local first_line = table.remove(lines, 1)
+			local convert = first_line == "to md" and translate.jira_to_md
+				or first_line == "to jira" and translate.md_to_jira
+				or function(str)
+					return str
+				end
+			local text = convert(vim.fn.join(lines, "\n"))
+			return ("> [!convert] to \n%s> [!cnvend]"):format(text)
 		end
 		return ("[[%s]]"):format(section.path:get_filename():gsub(".md$", ""))
 	end,
