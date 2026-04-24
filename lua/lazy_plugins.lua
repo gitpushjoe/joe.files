@@ -177,17 +177,6 @@ return {
 
 	{ "numToStr/Comment.nvim", opts = {} },
 
-	-- {
-	-- 	"nvim-neo-tree/neo-tree.nvim",
-	-- 	branch = "v3.x",
-	-- 	dependencies = {
-	-- 		"nvim-lua/plenary.nvim",
-	-- 		"nvim-tree/nvim-web-devicons", -- not strictly required, but recommended
-	-- 		"MunifTanjim/nui.nvim",
-	-- 		-- "3rd/image.nvim", -- Optional image support in preview window: See `# Preview Mode` for more information
-	-- 	},
-	-- },
-
 	-- Keeping telescope because I CBA to implement "search my keymaps" in Fzf
 	{
 		"nvim-telescope/telescope.nvim",
@@ -438,86 +427,79 @@ return {
 		end,
 	},
 
-	-- {
-	-- 	"wellle/context.vim",
-	-- },
-
 	{
 		"wellle/targets.vim",
 	},
 
-	{
-		"mfussenegger/nvim-dap",
-		dependencies = {
-			"rcarriga/nvim-dap-ui",
-			"nvim-neotest/nvim-nio",
-		},
-		config = function()
-			local dap = require("dap")
-			-- 	setupCommands = {
-			-- 		{
-			-- 			text = "-enable-pretty-printing",
-			-- 			description = "enable pretty printing",
-			-- 			ignoreFailures = false,
-			-- 		},
-			-- 	},
-			-- })
-			local dapui = require("dapui")
-			dapui.setup({ element_mappings = {
-				stacks = {
-					open = "<CR>",
-					expand = "o",
-				},
-			} })
-			-- TODO: Figure this out:
-			vim.keymap.set("n", "<leader>gB", dap.toggle_breakpoint, { noremap = true, silent = true })
-			vim.keymap.set("n", "<leader>gC", dap.continue, { noremap = true, silent = true })
-
-			dap.listeners.before.attach.dapui_config = function()
-				dapui.open()
-			end
-			dap.listeners.before.launch.dapui_config = function()
-				dapui.open()
-			end
-			dap.listeners.before.event_terminated.dapui_config = function()
-				dapui.close()
-			end
-			dap.listeners.before.event_exited.dapui_config = function()
-				dapui.close()
-			end
-
-			dap.adapters.cppdbg = {
-				id = "cppdbg",
-				type = "executable",
-				command = "/home/ubuntu/extension/debugAdapters/bin/OpenDebugAD7",
-				options = {
-					detached = false,
-				},
-			}
-
-			dap.configurations.cpp = {
-				{
-					name = "Attach to process",
-					type = "cppdbg",
-					request = "attach",
-					program = "/home/ubuntu/mongo/build/install/bin/mongod",
-					processId = function()
-						-- local handle = assert(io.popen("echo -n $(pidof mongod)"))
-						local id = tonumber(util.exec("ps -ef | grep aarch64 | head -1 | awk '{ print $2 }'"))
-						print(id)
-						vim.notify(("%d"):format(id))
-						return id
-					end,
-					MIMode = "gdb",
-				},
-			}
-			dap.configurations.c = dap.configurations.cpp
-		end,
-	},
-
-	{
-		"vuciv/golf",
-	},
+	-- will re-enable this when i actually decide to use it
+	-- {
+	-- 	"mfussenegger/nvim-dap",
+	-- 	dependencies = {
+	-- 		"rcarriga/nvim-dap-ui",
+	-- 		"nvim-neotest/nvim-nio",
+	-- 	},
+	-- 	config = function()
+	-- 		local dap = require("dap")
+	-- 		-- 	setupCommands = {
+	-- 		-- 		{
+	-- 		-- 			text = "-enable-pretty-printing",
+	-- 		-- 			description = "enable pretty printing",
+	-- 		-- 			ignoreFailures = false,
+	-- 		-- 		},
+	-- 		-- 	},
+	-- 		-- })
+	-- 		local dapui = require("dapui")
+	-- 		dapui.setup({ element_mappings = {
+	-- 			stacks = {
+	-- 				open = "<CR>",
+	-- 				expand = "o",
+	-- 			},
+	-- 		} })
+	-- 		-- TODO: Figure this out:
+	-- 		vim.keymap.set("n", "<leader>gB", dap.toggle_breakpoint, { noremap = true, silent = true })
+	-- 		vim.keymap.set("n", "<leader>gC", dap.continue, { noremap = true, silent = true })
+	--
+	-- 		dap.listeners.before.attach.dapui_config = function()
+	-- 			dapui.open()
+	-- 		end
+	-- 		dap.listeners.before.launch.dapui_config = function()
+	-- 			dapui.open()
+	-- 		end
+	-- 		dap.listeners.before.event_terminated.dapui_config = function()
+	-- 			dapui.close()
+	-- 		end
+	-- 		dap.listeners.before.event_exited.dapui_config = function()
+	-- 			dapui.close()
+	-- 		end
+	--
+	-- 		dap.adapters.cppdbg = {
+	-- 			id = "cppdbg",
+	-- 			type = "executable",
+	-- 			command = "/home/ubuntu/extension/debugAdapters/bin/OpenDebugAD7",
+	-- 			options = {
+	-- 				detached = false,
+	-- 			},
+	-- 		}
+	--
+	-- 		dap.configurations.cpp = {
+	-- 			{
+	-- 				name = "Attach to process",
+	-- 				type = "cppdbg",
+	-- 				request = "attach",
+	-- 				program = "/home/ubuntu/mongo/build/install/bin/mongod",
+	-- 				processId = function()
+	-- 					-- local handle = assert(io.popen("echo -n $(pidof mongod)"))
+	-- 					local id = tonumber(util.exec("ps -ef | grep aarch64 | head -1 | awk '{ print $2 }'"))
+	-- 					print(id)
+	-- 					vim.notify(("%d"):format(id))
+	-- 					return id
+	-- 				end,
+	-- 				MIMode = "gdb",
+	-- 			},
+	-- 		}
+	-- 		dap.configurations.c = dap.configurations.cpp
+	-- 	end,
+	-- },
 
 	{
 		"SmiteshP/nvim-navic",
@@ -742,15 +724,16 @@ return {
 		end,
 	},
 
-	{
-		"folke/trouble.nvim",
-		config = function()
-			require("trouble").setup()
-		end,
-	},
+	-- {
+	-- 	"folke/trouble.nvim",
+	-- 	config = function()
+	-- 		require("trouble").setup()
+	-- 	end,
+	-- },
 
 	{
 		"Fildo7525/pretty_hover",
+		event = "LspAttach",
 		config = function()
 			require("pretty_hover").setup({})
 			vim.api.nvim_set_keymap(
@@ -896,10 +879,6 @@ return {
 
 			hooks.register(hooks.type.SCOPE_HIGHLIGHT, hooks.builtin.scope_highlight_from_extmark)
 		end,
-	},
-
-	{
-		"ThePrimeagen/vim-be-good",
 	},
 
 	{

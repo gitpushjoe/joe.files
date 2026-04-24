@@ -47,11 +47,20 @@ local function setup_idkwhatthisis()
 	vim.g.loaded_netrwPlugin = 1
 end
 
+local function setup_leap()
+	vim.keymap.set({ 'n', 'x', 'o' }, 's', '<Plug>(leap)')
+	vim.keymap.set('n', 'S', '<Plug>(leap-from-window)')
+end
+
 vim.wo.relativenumber = true
 
 require("pckr").add({
 
-	"ggandor/lightspeed.nvim",
+	-- maybe some day
+	-- {
+	-- 	"https://codeberg.org/andyg/leap.nvim",
+	-- 	config = setup_leap
+	-- },
 
 	{
 		"xiyaowong/transparent.nvim",
@@ -128,6 +137,8 @@ require("pckr").add({
 			require("crazywall-setup")
 		end,
 	},
+
+	"dstein64/vim-startuptime",
 })
 
 setup_idkwhatthisis()

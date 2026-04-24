@@ -58,4 +58,6 @@ cmp.setup({
 	},
 })
 
-require("luasnips")
+vim.schedule(function()
+	require("luasnips")
+end)
