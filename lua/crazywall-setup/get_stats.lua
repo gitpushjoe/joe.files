@@ -36,6 +36,13 @@ return function(period)
 		local data = {}
 		for i = 0, 14 do
 			data[i] = (function()
+				local default = vim.deepcopy(data[i - 1]) or {}
+				local ANSWERED_QUESTION_COUNT_IDX = 2
+				local COMPLETE_TASK_COUNT_IDX = 4
+				local NEW_REFERENCE_COUNT_IDX = 6
+				default[ANSWERED_QUESTION_COUNT_IDX] = 0
+				default[COMPLETE_TASK_COUNT_IDX] = 0
+				default[NEW_REFERENCE_COUNT_IDX] = 0
 				return util.with(io.open(("/home/ubuntu/vault/gls/g%02x%x.md"):format(p, i), "r"), function(handle)
 					local gen = handle:lines()
 					local line = gen()
@@ -53,7 +60,7 @@ return function(period)
 					end
 					counts[#counts] = nil
 					return counts
-				end, data[i - 1])
+				end, default)
 			end)()
 		end
 		return data
