@@ -91,7 +91,8 @@ return function ()
 				"css",
 				"markdown",
 				"yaml",
-				"yml"
+				"yml",
+				"diff"
 			})
 	end, 0)
 end
