@@ -17,6 +17,7 @@ return function ()
 				"bash",
 				"css",
 				"markdown",
+				"diff"
 			},
 			highlight = { enable = true },
 			indent = { enable = true },
