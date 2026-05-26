@@ -1,4 +1,5 @@
 local exec = require("util").exec
+local with = require("util").with
 
 vim.opt.clipboard:append("unnamedplus")
 vim.api.nvim_exec(
@@ -993,15 +994,27 @@ vim.api.nvim_set_keymap("n", "<leader>rn", "<cmd>lua vim.lsp.buf.rename()<CR>", 
 
 function _G.open_recent()
 	local prefix = os.getenv("OLDFILES_PREFIX") or ""
+	local exists = vim.uv.fs_stat
 	local path = (function()
 		for _, p in ipairs(vim.v.oldfiles) do
-			if not p:find("%.git") and p:sub(1, #prefix) == prefix then
+			if
+				not p:find("%.git")
+				and p:sub(1, #prefix) == prefix
+				and not
+					-- return 
+					exists(
+						("%s/.local/state/nvim/swap/%s.swp"):format(vim.uv.os_homedir(), vim.uv.fs_realpath(p):gsub('/', '%%')))
+					-- )
+			then
 				return p
 			end
 		end
 		return nil
 	end)()
 	if path then
+		-- local swap = vim.uv.fs_realpath(path):gsub("/", "%%")
+		-- swap = ("%s/.local/state/nvim/swap/%s.swp"):format(vim.uv.os_homedir(), swap)
+		-- vim.notify(tostring(vim.uv.fs_stat(swap)))
 		vim.cmd(("edit %s"):format(vim.fn.fnamemodify(path, ":p")))
 	end
 end
@@ -1033,7 +1046,7 @@ vim.filetype.add({
 vim.api.nvim_create_autocmd("SwapExists", {
 	pattern = "*",
 	callback = function()
-		vim.cmd('silent set shortmess=A')
+		vim.cmd("silent set shortmess=A")
 		vim.v.swapchoice = "o" -- 'o' = open read-only
 	end,
 })
@@ -1048,21 +1061,21 @@ vim.api.nvim_create_autocmd("SwapExists", {
 --   end,
 -- })
 --
-vim.api.nvim_create_user_command('Python', function(opts)
-  local input = opts.args
-  -- Split on last ';' (if any)
-  local before, expr = input:match("^(.*);(.*)$")
+vim.api.nvim_create_user_command("Python", function(opts)
+	local input = opts.args
+	-- Split on last ';' (if any)
+	local before, expr = input:match("^(.*);(.*)$")
 
-  local code
-  if expr then
-    before = before:gsub("%s+$", "")
-    expr = expr:gsub("^%s+", "")
-    code = string.format("%s; print(%s)", before, expr)
-  else
-    expr = vim.trim(input)
-    code = string.format("print(%s)", expr)
-  end
+	local code
+	if expr then
+		before = before:gsub("%s+$", "")
+		expr = expr:gsub("^%s+", "")
+		code = string.format("%s; print(%s)", before, expr)
+	else
+		expr = vim.trim(input)
+		code = string.format("print(%s)", expr)
+	end
 
-  local cmd = "python3 -c " .. vim.fn.shellescape(code)
-  vim.cmd("!" .. cmd)
+	local cmd = "python3 -c " .. vim.fn.shellescape(code)
+	vim.cmd("!" .. cmd)
 end, { nargs = "+" })
