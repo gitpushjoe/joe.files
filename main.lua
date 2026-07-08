@@ -234,7 +234,7 @@ local sync = function(only_these_paths)
 	os.execute(("cd %s && git add ."):format(ABSOLUTE_VAULT_PATH))
 	if only_these_paths then
 		for _, path in ipairs(only_these_paths) do
-			local cat = path:sub(#ABSOLUTE_VAULT_PATH + #"/" + 1, #ABSOLUTE_VAULT_PATH + #"/" + 3)
+			local cat = path:sub(#'"' + #ABSOLUTE_VAULT_PATH + #"/" + 1, #'"' + #ABSOLUTE_VAULT_PATH + #"/" + 3)
 			assert(({
 				gls = 1,
 				ref = 1,
