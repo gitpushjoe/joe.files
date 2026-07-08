@@ -119,25 +119,27 @@ local get_latest_commit_name = function()
 	return out
 end
 
-_ = [[
-# ~/day.sh
-
-today=$(date +"%Y-%m-%d")
-week_idx=$(( ($(date -d $today +%s) - $(date -d "2025-02-03" +%s)) / 604800 ))
-day_idx=$(($(date -d $today +%u) - 1))
-week_base=$(((week_idx / 3) * 16))
-week_mod_3=$((week_idx % 3))
-day=$((week_base + day_idx + week_mod_3 * 5))
-printf "%03x\n" $day
-]]
+local get_day = function()
+	local hour_to_avoid_daylight_savings_time_annoyances = 6
+	local week_idx = math.floor(
+		(
+			tonumber(os.date("%s"))
+			- tonumber(
+				os.time({ year = 2025, month = 2, day = 3, hour = hour_to_avoid_daylight_savings_time_annoyances })
+			)
+		) / 604800
+	)
+	local day_idx = tonumber(os.date("%u")) - 1
+	local week_base = math.floor(week_idx / 3) * 16
+	local week_mod3 = week_idx % 3
+	local today = week_base + day_idx + week_mod3 * 5
+	return ("%03x"):format(today)
+end
 
 -- Returns a string such as "day042" depending on the current day.
 ---@return string
 local get_target_commit_name = function()
-	local phandle = assert(io.popen("echo -n $(bash ~/day.sh)"))
-	local out = "day" .. phandle:read("*a")
-	phandle:close()
-	return out
+	return ("day%s"):format(get_day())
 end
 
 ---@return file*
