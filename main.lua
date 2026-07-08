@@ -115,7 +115,7 @@ end)()
 -- Retuns the name of the most recent commit.
 ---@return string
 local get_latest_commit_name = function()
-	local phandle = assert(io.popen("cd ~/vault; echo -n $(git log -1 --pretty=%B)"))
+	local phandle = assert(io.popen(("cd %s; echo -n $(git log -1 --pretty=%B)"):format(ABSOLUTE_VAULT_PATH)))
 	local out = phandle:read("*a")
 	phandle:close()
 	return out
@@ -148,12 +148,12 @@ end
 ---@return file*
 local get_all_paths_phandle = function(group)
 	group = group or "**"
-	return assert(io.popen(("ls -1p -Q ~/vault/" .. group .. "/*.md")))
+	return assert(io.popen((("ls -1p -Q %s/%s/*.md"):format(ABSOLUTE_VAULT_PATH, group))))
 end
 
 -- Check if the vault has been modified since we last checked.
 local check_if_sync_is_necessary = function()
-	local phandle = assert(io.popen("cd ~/vault && git status --porcelain"))
+	local phandle = assert(io.popen(("cd %s && git status --porcelain"):format(ABSOLUTE_VAULT_PATH)))
 	local output = phandle:read("*a")
 	local is_necessary = output ~= ""
 	phandle:close()
@@ -178,7 +178,7 @@ local sync_path = function(path, cat)
 	if path == "" then
 		return
 	end
-	local tags = assert(get_tags(path))
+	local tags = get_tags(path)
 	local note_was_deleted = tags == nil
 	local note_existed = get_tags_of_path(path) ~= nil
 	-- If the note was deleted or previously existed, we want to try to delete
@@ -200,7 +200,7 @@ local sync_path = function(path, cat)
 	tags[""] = 1 -- Insert the null tag
 	table.insert(assert(get_all_paths_in_category(cat)), path)
 	set_tags_of_path(path, {})
-	for tag in pairs(tags) do
+	for tag in pairs(assert(tags)) do
 		local tag_to_paths = get_map_of_tags_to_paths(cat)
 		tag_to_paths[tag] = tag_to_paths[tag] or {}
 		table.insert(tag_to_paths[tag], path)
@@ -231,7 +231,7 @@ local sync = function(only_these_paths)
 		reset_all_note_paths()
 		reset_path_to_tag_map()
 	end
-	os.execute("cd ~/vault && git add .")
+	os.execute(("cd %s && git add ."):format(ABSOLUTE_VAULT_PATH))
 	if only_these_paths then
 		for _, path in ipairs(only_these_paths) do
 			local cat = path:sub(#ABSOLUTE_VAULT_PATH + #"/" + 1, #ABSOLUTE_VAULT_PATH + #"/" + 3)
@@ -245,9 +245,11 @@ local sync = function(only_these_paths)
 			sync_path(path, cat)
 		end
 	end
+	if not only_these_paths then
+		reset_map_of_tags_to_paths()
+	end
 	for _, cat in get_categories() do
 		if not only_these_paths then
-			reset_map_of_tags_to_paths[cat] = {}
 			local phandle = get_all_paths_phandle(cat)
 			for path in phandle:lines() do
 				sync_path(path, cat)
@@ -256,10 +258,10 @@ local sync = function(only_these_paths)
 		end
 	end
 	if get_latest_commit_name() == get_target_commit_name() then
-		os.execute("cd ~/vault && git commit --amend -m " .. get_target_commit_name() .. "; exit")
+		os.execute(("cd %s && git commit --amend -m %s; exit"):format(ABSOLUTE_VAULT_PATH, get_target_commit_name()))
 		return
 	end
-	os.execute("cd ~/vault && git commit -m " .. get_target_commit_name())
+	os.execute(("cd %s && git commit -m %s"):format(ABSOLUTE_VAULT_PATH, get_target_commit_name()))
 end
 
 -- Returns a list of absolute note paths in the specified categories, that

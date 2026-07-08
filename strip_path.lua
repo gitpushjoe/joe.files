@@ -10,7 +10,7 @@ return function(path, full, vault_path)
 	end
 	path = path:gsub("\\\\", "\\")
 	if full then
-		path = path:gsub("^" .. vault_path .. "/vault/.../", ""):gsub(".md$", "")
+		path = path:gsub("^" .. vault_path .. "/.../", ""):gsub(".md$", "")
 	end
 	return path
 end
