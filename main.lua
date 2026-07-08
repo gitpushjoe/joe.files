@@ -115,7 +115,7 @@ end)()
 -- Retuns the name of the most recent commit.
 ---@return string
 local get_latest_commit_name = function()
-	local phandle = assert(io.popen(("cd %s; echo -n $(git log -1 --pretty=%B)"):format(ABSOLUTE_VAULT_PATH)))
+	local phandle = assert(io.popen(("cd %s; echo -n $(git log -1 --pretty=%%B)"):format(ABSOLUTE_VAULT_PATH)))
 	local out = phandle:read("*a")
 	phandle:close()
 	return out
@@ -245,9 +245,6 @@ local sync = function(only_these_paths)
 			sync_path(path, cat)
 		end
 	end
-	if not only_these_paths then
-		reset_map_of_tags_to_paths()
-	end
 	for _, cat in get_categories() do
 		if not only_these_paths then
 			local phandle = get_all_paths_phandle(cat)
@@ -273,8 +270,8 @@ end
 ---@return string[]?, string?
 local function fetch_note_paths(categories, tags, filter)
 	local res = {}
-	local category_iter = (#categories == 1 and categories[1] == "*") and get_categories() or ipairs(categories)
-	for _, cat in category_iter do
+	categories = (#categories == 1 and categories[1] == "*") and category_list or categories
+	for _, cat in ipairs(categories) do
 		local paths = {}
 		-- If there are no tags, we want to fetch everything.
 		if #tags == 0 then
@@ -382,7 +379,7 @@ end
 ---@param cat string
 local function fetch_random_path(cat)
 	local paths = get_all_paths_in_category(cat)
-	return assert(paths[math.floor(math.random() * #paths)])
+	return assert(paths[1 + math.floor(math.random() * #paths)])
 end
 
 -- Returns the first few lines of a random note in the specified category.
