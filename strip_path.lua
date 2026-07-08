@@ -3,13 +3,14 @@
 -- relative path.
 ---@param path string
 ---@param full boolean
-return function(path, full)
+---@param vault_path string
+return function(path, full, vault_path)
 	if path:sub(1, 1) == '"' and path:sub(-1, -1) == '"' then
 		path = path:sub(2, -2):gsub('\\"', '"')
 	end
 	path = path:gsub("\\\\", "\\")
 	if full then
-		path = path:gsub("^/home/ubuntu/vault/.../", ""):gsub(".md$", "")
+		path = path:gsub("^" .. vault_path .. "/vault/.../", ""):gsub(".md$", "")
 	end
 	return path
 end

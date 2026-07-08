@@ -25,6 +25,8 @@ local function split(inp, sep)
 	return tbl
 end
 
+local ABSOLUTE_VAULT_PATH = arg[1] or ("%s/vault"):format(os.getenv("HOME"))
+
 local category_list = {
 	"gls",
 	"ref",
@@ -119,6 +121,7 @@ local get_latest_commit_name = function()
 	return out
 end
 
+---Returns the day_id of the current day
 local get_day = function()
 	local hour_to_avoid_daylight_savings_time_annoyances = 6
 	local week_idx = math.floor(
@@ -137,11 +140,11 @@ local get_day = function()
 end
 
 -- Returns a string such as "day042" depending on the current day.
----@return string
 local get_target_commit_name = function()
 	return ("day%s"):format(get_day())
 end
 
+---@param group string|nil
 ---@return file*
 local get_all_paths_phandle = function(group)
 	group = group or "**"
@@ -157,6 +160,20 @@ local check_if_sync_is_necessary = function()
 	return is_necessary, output
 end
 
+---@param path string
+---@param paths string[]
+local remove_from_list = function(path, paths)
+	local removals = 0
+	for i = #paths, 1, -1 do
+		if paths[i] == path then
+			table.remove(paths, i)
+			removals = removals + 1
+		end
+	end
+	return removals
+end
+
+---Updates our understanding of the path `path` in category `cat`
 local sync_path = function(path, cat)
 	if path == "" then
 		return
@@ -164,36 +181,29 @@ local sync_path = function(path, cat)
 	local tags = assert(get_tags(path))
 	local note_was_deleted = tags == nil
 	local note_existed = get_tags_of_path(path) ~= nil
+	-- If the note was deleted or previously existed, we want to try to delete
+	-- everything we knew about the note.
 	if note_was_deleted or note_existed then
-		print("forgetting " .. path .. " in category " .. cat)
-		local remove_from_list = function(paths)
-			local removals = 0
-			for i = #paths, 1, -1 do
-				if paths[i] == path then
-					table.remove(paths, i)
-					removals = removals + 1
-				end
-			end
-			assert(removals < 2)
-		end
-		local map = get_map_of_tags_to_paths(cat)
-		for _, paths in pairs(map) do
-			remove_from_list(paths)
+		print(("forgetting %s in category %s"):format(path, cat))
+		local tag_to_paths_map = get_map_of_tags_to_paths(cat)
+		for _, paths in pairs(tag_to_paths_map) do
+			assert(remove_from_list(path, paths) < 2)
 		end
 		set_tags_of_path(path, nil)
-		remove_from_list(get_all_paths_in_category(cat))
+		assert(remove_from_list(path, get_all_paths_in_category(cat)) < 2)
 		if note_was_deleted then
+			-- We have no more work to do.
 			return
 		end
 	end
-	print("syncing " .. path .. " in category " .. cat)
+	print(("syncing %s in category %s"):format(path, cat))
 	tags[""] = 1 -- Insert the null tag
 	table.insert(assert(get_all_paths_in_category(cat)), path)
 	set_tags_of_path(path, {})
 	for tag in pairs(tags) do
-		local tag_to_notes = get_map_of_tags_to_paths(cat)
-		tag_to_notes[tag] = tag_to_notes[tag] or {}
-		table.insert(tag_to_notes[tag], path)
+		local tag_to_paths = get_map_of_tags_to_paths(cat)
+		tag_to_paths[tag] = tag_to_paths[tag] or {}
+		table.insert(tag_to_paths[tag], path)
 		get_tags_of_path(path)[tag] = 1
 	end
 end
@@ -206,7 +216,7 @@ local git_status_to_full_paths = function(lines)
 			start = start + 1
 			stop = stop - 1
 		end
-		local path = '"/home/ubuntu/vault/' .. line:sub(start, stop) .. '"'
+		local path = ('"%s/%s"'):format(ABSOLUTE_VAULT_PATH, line:sub(start, stop))
 		lines[i] = path
 		print("modified path: " .. path)
 	end
@@ -224,7 +234,7 @@ local sync = function(only_these_paths)
 	os.execute("cd ~/vault && git add .")
 	if only_these_paths then
 		for _, path in ipairs(only_these_paths) do
-			local cat = path:sub(#'"/home/ubuntu/vault/' + 1, #'"/home/ubuntu/vault/' + 3)
+			local cat = path:sub(#ABSOLUTE_VAULT_PATH + #"/" + 1, #ABSOLUTE_VAULT_PATH + #"/" + 3)
 			assert(({
 				gls = 1,
 				ref = 1,
@@ -263,27 +273,32 @@ local function fetch_note_paths(categories, tags, filter)
 	local res = {}
 	local category_iter = (#categories == 1 and categories[1] == "*") and get_categories() or ipairs(categories)
 	for _, cat in category_iter do
-		local notes = {}
+		local paths = {}
+		-- If there are no tags, we want to fetch everything.
 		if #tags == 0 then
 			table.insert(tags, 1, "")
 		end
+		-- If the first tag is inverted, then we still want to fetch everything,
+		-- so that we can filter for only the notes that *don't* have this tag.
 		if tags[1]:sub(1, 1) == "~" then
 			table.insert(tags, 1, "")
 		end
-		local fetched_notes = get_paths_with_tag(cat, tags[1]) or {}
-		for _, note in ipairs(fetched_notes) do
-			table.insert(notes, note)
+		local fetched_paths = get_paths_with_tag(cat, tags[1]) or {}
+		-- Copy the list
+		for _, path in ipairs(fetched_paths) do
+			table.insert(paths, path)
 		end
-		for j = #notes, 1, -1 do
+		for j = #paths, 1, -1 do
 			(function()
-				local note = notes[j]
-				local stripped_note_path = strip_path(note, true)
+				local path = paths[j]
+				local stripped_note_path = strip_path(path, true, ABSOLUTE_VAULT_PATH)
 				if filter ~= "*" and filter ~= "" then
 					if not string.match(stripped_note_path, "^" .. filter) then
-						table.remove(notes, j)
+						table.remove(paths, j)
 						return
 					end
 				end
+				-- We can skip the first tag since we already filtered for it.
 				for i = 2, #tags do
 					local tag = tags[i]
 					---@type boolean?
@@ -292,21 +307,21 @@ local function fetch_note_paths(categories, tags, filter)
 						tag = tag:sub(2)
 						expected = false
 					end
-					if path_has_tag(note, tag) ~= expected then
-						table.remove(notes, j)
+					if path_has_tag(path, tag) ~= expected then
+						table.remove(paths, j)
 						return
 					end
 				end
-				notes[j] = note
+				paths[j] = path
 			end)()
 		end
-		for _, note in ipairs(notes) do
-			table.insert(res, note)
+		for _, path in ipairs(paths) do
+			table.insert(res, path)
 		end
 	end
 
 	local sorter = function(a, b)
-		a, b = strip_path(a, true), strip_path(b, true)
+		a, b = strip_path(a, true, ABSOLUTE_VAULT_PATH), strip_path(b, true, ABSOLUTE_VAULT_PATH)
 		if a:sub(1, 5) < b:sub(1, 5) then
 			return true
 		end
@@ -325,8 +340,6 @@ end
 ---@field tags string[]
 ---@field header string
 ---@field mods string[]
-
--- os.exit(0)
 
 ---@param categories string[]
 ---@param queries Query[]
@@ -353,7 +366,7 @@ local function generate(categories, queries)
 					end
 				end
 			end
-			str = str .. prefix .. "[[" .. strip_path(file, true) .. "]]\n> "
+			str = str .. prefix .. "[[" .. strip_path(file, true, ABSOLUTE_VAULT_PATH) .. "]]\n> "
 		end
 		if i ~= #queries and #main_files == 0 then
 			str = str .. "\n> "
@@ -375,7 +388,7 @@ end
 ---@return string?, string?
 local function get_random_note(cat)
 	local path = fetch_random_path(cat)
-	path = strip_path(path, false)
+	path = strip_path(path, false, ABSOLUTE_VAULT_PATH)
 	local handle = assert(io.open(path, "r"))
 	local txt = ""
 	local i = 1
@@ -397,7 +410,7 @@ local function get_random_note(cat)
 		end
 	end
 	txt = txt:gsub("\n$", ""):gsub("^\n*", "")
-	return path:sub(#"/home/ubuntu/vault/zzz/" + 1, -4) .. "\n" .. "> \n> " .. txt:gsub("\n", "\n> ")
+	return path:sub(#ABSOLUTE_VAULT_PATH + #"/zzz/" + 1, -4) .. "\n" .. "> \n> " .. txt:gsub("\n", "\n> ")
 end
 
 sync()
