@@ -25,30 +25,90 @@ local function split(inp, sep)
 	return tbl
 end
 
--- Maps note types to a map of tag strings to the list of absolute paths of
--- notes that contain that tags.
----@type table<string, table<string, string[]>>
-local tag_to_notes_map = {
-	gls = {},
-	ref = {},
-	imp = {},
-	nte = {},
-	def = {},
+local category_list = {
+	"gls",
+	"ref",
+	"imp",
+	"nte",
+	"def",
 }
 
--- Maps absolute note paths to the set of its tags.
----@type table<string, {string: 1}>
-local note_to_tags_map = {}
+local get_categories = function()
+	return ipairs(category_list)
+end
 
--- Maps note types to the list of absolute paths of notes of that type.
----@type table<string, string[]>
-local all_note_paths = {
-	gls = {},
-	ref = {},
-	imp = {},
-	nte = {},
-	def = {},
-}
+local get_map_of_tags_to_paths, get_paths_with_tag, reset_map_of_tags_to_paths = (function()
+	-- Maps [note type] -> { [tag (string)] -> [list of absolute paths to notes with tag `tag`] }
+	---@type table<string, table<string, string[]>>
+	local map = {
+		gls = {},
+		ref = {},
+		imp = {},
+		nte = {},
+		def = {},
+	}
+
+	---@param cat string
+	return function(cat)
+		return map[cat]
+	end,
+	---@param cat string
+	---@param tag string
+	function(cat, tag)
+		return map[cat][tag]
+	end,
+	function()
+		map = { gls = {}, ref = {}, imp = {}, nte = {}, def = {} }
+	end
+end)()
+
+local get_tags_of_path, set_tags_of_path, path_has_tag, reset_path_to_tag_map = (function()
+	-- Maps absolute note paths to the set of its tags.
+	---@type table<string, {string: 1}>
+	local map = {}
+
+	---@param path string
+	return function(path)
+		return map[path]
+	end,
+	---@param path string
+	---@param tags string[]|nil
+	function(path, tags)
+		map[path] = tags
+	end,
+	---@param path string
+	---@param tag string
+	function(path, tag)
+		return map[path] and map[path][tag] == 1 or false
+	end,
+	function()
+		map = {}
+	end
+end)()
+
+local get_all_paths_in_category, reset_all_note_paths = (function()
+	-- Maps note types to the list of absolute paths of notes of that type.
+	---@type table<string, string[]>
+	local map = {
+		gls = {},
+		ref = {},
+		imp = {},
+		nte = {},
+		def = {},
+	}
+	---@param cat 'gls'|'ref'|'imp'|'nte'|'def'
+	return function(cat)
+		return map[cat]
+	end, function()
+		map = {
+			gls = {},
+			ref = {},
+			imp = {},
+			nte = {},
+			def = {},
+		}
+	end
+end)()
 
 -- Retuns the name of the most recent commit.
 ---@return string
@@ -99,9 +159,9 @@ local sync_path = function(path, cat)
 	if path == "" then
 		return
 	end
-	local tags = get_tags(path)
+	local tags = assert(get_tags(path))
 	local note_was_deleted = tags == nil
-	local note_existed = note_to_tags_map[path] ~= nil
+	local note_existed = get_tags_of_path(path) ~= nil
 	if note_was_deleted or note_existed then
 		print("forgetting " .. path .. " in category " .. cat)
 		local remove_from_list = function(paths)
@@ -114,24 +174,25 @@ local sync_path = function(path, cat)
 			end
 			assert(removals < 2)
 		end
-		local map = tag_to_notes_map[cat]
+		local map = get_map_of_tags_to_paths(cat)
 		for _, paths in pairs(map) do
 			remove_from_list(paths)
 		end
-		note_to_tags_map[path] = nil
-		remove_from_list(all_note_paths[cat])
+		set_tags_of_path(path, nil)
+		remove_from_list(get_all_paths_in_category(cat))
 		if note_was_deleted then
 			return
 		end
 	end
 	print("syncing " .. path .. " in category " .. cat)
 	tags[""] = 1 -- Insert the null tag
-	table.insert(assert(all_note_paths[cat]), path)
-	note_to_tags_map[path] = {}
+	table.insert(assert(get_all_paths_in_category(cat)), path)
+	set_tags_of_path(path, {})
 	for tag in pairs(tags) do
-		tag_to_notes_map[cat][tag] = tag_to_notes_map[cat][tag] or {}
-		table.insert(tag_to_notes_map[cat][tag], path)
-		note_to_tags_map[path][tag] = 1
+		local tag_to_notes = get_map_of_tags_to_paths(cat)
+		tag_to_notes[tag] = tag_to_notes[tag] or {}
+		table.insert(tag_to_notes[tag], path)
+		get_tags_of_path(path)[tag] = 1
 	end
 end
 
@@ -154,11 +215,9 @@ end
 ---@param only_these_paths (string[])|nil
 local sync = function(only_these_paths)
 	if not only_these_paths then
-		for cat in pairs(tag_to_notes_map) do
-			tag_to_notes_map[cat] = {}
-			all_note_paths[cat] = {}
-		end
-		note_to_tags_map = {}
+		reset_map_of_tags_to_paths()
+		reset_all_note_paths()
+		reset_path_to_tag_map()
 	end
 	os.execute("cd ~/vault && git add .")
 	if only_these_paths then
@@ -170,13 +229,13 @@ local sync = function(only_these_paths)
 				imp = 1,
 				nte = 1,
 				def = 1,
-			})[cat] == 1)
+			})[cat] == 1, cat)
 			sync_path(path, cat)
 		end
 	end
-	for _, cat in ipairs({ "gls", "ref", "imp", "nte", "def" }) do
+	for _, cat in get_categories() do
 		if not only_these_paths then
-			tag_to_notes_map[cat] = {}
+			reset_map_of_tags_to_paths[cat] = {}
 			local phandle = get_all_paths_phandle(cat)
 			for path in phandle:lines() do
 				sync_path(path, cat)
@@ -200,8 +259,8 @@ end
 ---@return string[]?, string?
 local function fetch_note_paths(categories, tags, filter)
 	local res = {}
-	categories = (#categories == 1 and categories[1] == "*") and { "gls", "ref", "imp", "nte", "def" } or categories
-	for _, cat in ipairs(categories) do
+	local category_iter = (#categories == 1 and categories[1] == "*") and get_categories() or ipairs(categories)
+	for _, cat in category_iter do
 		local notes = {}
 		if #tags == 0 then
 			table.insert(tags, 1, "")
@@ -209,7 +268,7 @@ local function fetch_note_paths(categories, tags, filter)
 		if tags[1]:sub(1, 1) == "~" then
 			table.insert(tags, 1, "")
 		end
-		local fetched_notes = tag_to_notes_map[cat][tags[1]] or {}
+		local fetched_notes = get_paths_with_tag(cat, tags[1]) or {}
 		for _, note in ipairs(fetched_notes) do
 			table.insert(notes, note)
 		end
@@ -225,13 +284,13 @@ local function fetch_note_paths(categories, tags, filter)
 				end
 				for i = 2, #tags do
 					local tag = tags[i]
-					---@type integer?
-					local expected = 1
+					---@type boolean?
+					local expected = true
 					if tag:sub(1, 1) == "~" then
 						tag = tag:sub(2)
-						expected = nil
+						expected = false
 					end
-					if note_to_tags_map[note][tag] ~= expected then
+					if path_has_tag(note, tag) ~= expected then
 						table.remove(notes, j)
 						return
 					end
@@ -283,7 +342,7 @@ local function generate(categories, queries)
 			local prefix = ""
 			if mods and #mods > 0 then
 				prefix = "   "
-				local tags = note_to_tags_map[file]
+				local tags = get_tags_of_path(file)
 				for _, mod in ipairs(mods) do
 					local display, tag = mod[1], mod[2]
 					-- print(display, tag, mod[1], mod[2])
@@ -305,7 +364,8 @@ end
 -- Returns a random path in the specified category.
 ---@param cat string
 local function fetch_random_path(cat)
-	return assert(all_note_paths[cat][math.floor(math.random() * #all_note_paths[cat])])
+	local paths = get_all_paths_in_category(cat)
+	return assert(paths[math.floor(math.random() * #paths)])
 end
 
 -- Returns the first few lines of a random note in the specified category.
@@ -313,7 +373,7 @@ end
 ---@return string?, string?
 local function get_random_note(cat)
 	local path = fetch_random_path(cat)
-	path = strip_path(path)
+	path = strip_path(path, false)
 	local handle = assert(io.open(path, "r"))
 	local txt = ""
 	local i = 1
@@ -355,67 +415,69 @@ while true do
 	if client then
 		client:settimeout(10)
 		local now = socket.gettime()
-		local response = ((function()
-			local inp, err = client:receive()
-			if err then
-				print("err", err)
-				return err
-			end
-
-			if inp == "rand" then
-				return get_random_note("ref")
-			end
-
-			local inp_parts = split(inp, " ; ")
-			local queries = {}
-
-			err = #inp_parts < 2 and 'error: expected 2 or more " ; "-separated groups, received ' .. #inp_parts
-			if err then
-				print("err", err)
-				return err
-			end
-
-			for i = 2, #inp_parts do
-				local query_str = inp_parts[i]
-				print(query_str)
-				local query_parts = split(query_str, " > ")
-				if #query_parts < 3 then
-					return ('error: expected group #%d to be split into at least 3 " > "-separated groups, received %d'):format(
-						i - 1,
-						#query_parts
-					)
+		local response = (
+			(function()
+				local inp, err = client:receive()
+				if err then
+					print("err", err)
+					return err
 				end
-				local mods = {}
-				for j = 4, #query_parts do
-					local mod = query_parts[j]
-					if not mod:find(",") then
-						return ('error: expected to find "," in mod: "%s"'):format(mod)
+
+				if inp == "rand" then
+					return get_random_note("ref")
+				end
+
+				local inp_parts = split(inp, " ; ")
+				local queries = {}
+
+				err = #inp_parts < 2 and 'error: expected 2 or more " ; "-separated groups, received ' .. #inp_parts
+				if err then
+					print("err", err)
+					return err
+				end
+
+				for i = 2, #inp_parts do
+					local query_str = inp_parts[i]
+					print(query_str)
+					local query_parts = split(query_str, " > ")
+					if #query_parts < 3 then
+						return ('error: expected group #%d to be split into at least 3 " > "-separated groups, received %d'):format(
+							i - 1,
+							#query_parts
+						)
 					end
-					table.insert(mods, split(query_parts[j], ","))
+					local mods = {}
+					for j = 4, #query_parts do
+						local mod = query_parts[j]
+						if not mod:find(",") then
+							return ('error: expected to find "," in mod: "%s"'):format(mod)
+						end
+						table.insert(mods, split(query_parts[j], ","))
+					end
+					---@type Query
+					local query = {
+						filter = query_parts[1],
+						tags = split(query_parts[2], ","),
+						header = query_parts[3],
+						mods = mods,
+					}
+					table.insert(queries, query)
 				end
-				---@type Query
-				local query = {
-					filter = query_parts[1],
-					tags = split(query_parts[2], ","),
-					header = query_parts[3],
-					mods = mods,
-				}
-				table.insert(queries, query)
-			end
 
-			local sync_is_necessary, output = check_if_sync_is_necessary()
-			if sync_is_necessary then
-				sync(git_status_to_full_paths(split(output, "\n")))
+				local sync_is_necessary, output = check_if_sync_is_necessary()
+				if sync_is_necessary then
+					sync(git_status_to_full_paths(split(output, "\n")))
 				-- sync()
-			else
-				print("sync skipped!")
-			end
-			local text
-			text, err = generate(split(inp_parts[1], ","), queries)
-			text = text or ("error: " .. err)
-			print(text)
-			return text
-		end)() .. "\n")
+				else
+					print("sync skipped!")
+				end
+				local text
+				text, err = generate(split(inp_parts[1], ","), queries)
+				text = text or ("error: " .. err)
+				print(text)
+				return text
+			end)() .. "\n"
+		)
 		local diff = socket.gettime() - now
 		print("responded in " .. math.floor(diff * 1000 * 100) / 100 .. "ms")
 		client:send(response)
