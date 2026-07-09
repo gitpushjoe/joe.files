@@ -237,7 +237,9 @@ I use the GRIND system when notetaking. I do all of my notetaking in Neovim.
 I use three main naming conventions:
 
 **i001 qst: This is a question**
+
 **i002 task: This is a task**
+
 **r003 meet: This is a meeting**
 
 ### Plugins
