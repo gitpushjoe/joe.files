@@ -1,4 +1,5 @@
 local util = require("util")
+
 return {
 	"tpope/vim-fugitive",
 	"tpope/vim-rhubarb",
@@ -79,7 +80,7 @@ return {
 				conceal_delimiters = false,
 				sign = false,
 				border = "thick",
-				disable_background = { 'yaml' },
+				disable_background = { "yaml" },
 				language_name = false, -- TODO: remove
 				language_icon = false, -- TODO: remove
 			},
@@ -181,7 +182,7 @@ return {
 	-- Keeping telescope because I CBA to implement "search my keymaps" in Fzf
 	{
 		"nvim-telescope/telescope.nvim",
-		branch = "0.1.x",
+		version = "*",
 		dependencies = {
 			"nvim-lua/plenary.nvim",
 			-- Fuzzy Finder Algorithm which requires local dependencies to be built.
@@ -349,7 +350,7 @@ return {
 		-- 		vim.list_extend(opts.ensure_installed, { "c", "cpp", "sh" })
 		-- 	end
 		-- end,
-		  install_dir = vim.fn.stdpath('data') .. '/site',
+		install_dir = vim.fn.stdpath("data") .. "/site",
 		config = require("boring.setup_treesitter")(),
 		build = ":TSUpdate",
 	},
@@ -400,31 +401,31 @@ return {
 		opts = {},
 	},
 
-	{
-		"linrongbin16/gitlinker.nvim",
-		requires = "nvim-lua/plenary.nvim",
-		config = function()
-			require("gitlinker").setup({
-				"linrongbin16/gitlinker.nvim",
-				cmd = "GitLink",
-				opts = {},
-			})
-			for _, mode in ipairs({ "n", "v" }) do
-				vim.keymap.set(
-					mode,
-					"<leader>glc",
-					"<cmd>GitLink current_branch<cr>",
-					{ desc = "[G]it[L]ink [C]urrent branch" }
-				)
-				vim.keymap.set(
-					mode,
-					"<leader>gld",
-					"<cmd>GitLink default_branch<cr>",
-					{ desc = "[G]it[L]ink [D]urrent branch" }
-				)
-			end
-		end,
-	},
+	-- {
+	-- 	"linrongbin16/gitlinker.nvim",
+	-- 	requires = "nvim-lua/plenary.nvim",
+	-- 	config = function()
+	-- 		require("gitlinker").setup({
+	-- 			"linrongbin16/gitlinker.nvim",
+	-- 			cmd = "GitLink",
+	-- 			opts = {},
+	-- 		})
+	-- 		for _, mode in ipairs({ "n", "v" }) do
+	-- 			vim.keymap.set(
+	-- 				mode,
+	-- 				"<leader>glc",
+	-- 				"<cmd>GitLink current_branch<cr>",
+	-- 				{ desc = "[G]it[L]ink [C]urrent branch" }
+	-- 			)
+	-- 			vim.keymap.set(
+	-- 				mode,
+	-- 				"<leader>gld",
+	-- 				"<cmd>GitLink default_branch<cr>",
+	-- 				{ desc = "[G]it[L]ink [D]urrent branch" }
+	-- 			)
+	-- 		end
+	-- 	end,
+	-- },
 
 	{
 		"wellle/targets.vim",

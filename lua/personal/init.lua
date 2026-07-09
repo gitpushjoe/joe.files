@@ -670,13 +670,13 @@ function _G.GetLinkVis()
 	vim.fn.setreg("+", link)
 	vim.notify("Copied link!")
 end
-vim.api.nvim_set_keymap(
-	"v",
-	"<leader>gl",
-	":lua GetLinkVis()<CR>",
-	{ noremap = true, silent = true },
-	"Get Github Link (rarely works)"
-)
+-- vim.api.nvim_set_keymap(
+-- 	"v",
+-- 	"<leader>gl",
+-- 	":lua GetLinkVis()<CR>",
+-- 	{ noremap = true, silent = true },
+-- 	"Get Github Link (rarely works)"
+-- )
 
 vim.api.nvim_set_keymap(
 	"n",
@@ -997,14 +997,16 @@ function _G.open_recent()
 	local exists = vim.uv.fs_stat
 	local path = (function()
 		for _, p in ipairs(vim.v.oldfiles) do
+			p = p or ""
 			if
 				not p:find("%.git")
 				and p:sub(1, #prefix) == prefix
-				and not
-					-- return 
-					exists(
-						("%s/.local/state/nvim/swap/%s.swp"):format(vim.uv.os_homedir(), vim.uv.fs_realpath(p):gsub('/', '%%')))
-					-- )
+				and not exists(
+					("%s/.local/state/nvim/swap/%s.swp"):format(
+						vim.uv.os_homedir(),
+						(vim.uv.fs_realpath(p) or ""):gsub("/", "%%")
+					)
+				)
 			then
 				return p
 			end
@@ -1079,3 +1081,151 @@ vim.api.nvim_create_user_command("Python", function(opts)
 	local cmd = "python3 -c " .. vim.fn.shellescape(code)
 	vim.cmd("!" .. cmd)
 end, { nargs = "+" })
+
+vim.api.nvim_set_keymap("n", "<leader>cdp", "<cmd>cd %:h<CR>", { noremap = true, silent = true })
+
+vim.keymap.set("n", "<leader>gdv", function()
+	vim.cmd(
+		("DiffviewOpen %s"):format(
+			exec(
+				[[ git log --format='%H%x09%ae%x09%s' | awk -F '\t' 'NR==1{head=$2; next} $2!=head {print $1; exit}']]
+			)
+		)
+	)
+end)
+
+for _, nv in ipairs({ "n", "v" }) do
+	vim.keymap.set(nv, "<leader>gu", function()
+		local url
+		local mode = vim.fn.mode
+		if mode == "v" or mode == "V" or mode == "\22" then
+			url = table.concat(vim.fn.getregion(vim.fn.getpos("'<"), vim.fn.getpos("'>")), "\n")
+		else
+			url = vim.fn.expand("<cWORD>"):gsub("%)$", "")
+			if url:sub(1, #"http") ~= "http" then
+				url = table.concat(
+					vim.api.nvim_buf_get_text(0, vim.fn.getcurpos()[2], 0, vim.api.nvim_buf_line_count(0) - 1, 9999, {}),
+					"\n"
+				)
+				url = url:match("http[^ ^%)]*")
+			end
+		end
+		if url then
+			vim.system({ "open", url })
+		end
+	end)
+end
+
+_G.p = vim.inspect
+
+function _G.glink(should_open, markdown, jira)
+	local function getnow()
+		return tonumber(exec("echo -n $(($(date +%s%N)/1000000))"))
+	end
+	local now = getnow()
+	local insts = {}
+	vim.cmd("highlight GithubLinkGold guifg=#ffd700")
+	local dir = vim.fn.expand("%:h")
+	local root = vim.trim(exec(("cd %s && git rev-parse --show-toplevel"):format(dir)))
+	table.insert(insts, {"root", getnow() - now }); now = getnow()
+
+	local path = exec(("echo -n $(realpath -s --relative-to='%s' '%s')"):format(root, vim.fn.expand("%")))
+	table.insert(insts, {"realpath relative", getnow() - now }); now = getnow()
+
+	-- local head_pushed = #exec(("cd %s && git branch -r --contains HEAD | grep -q . && echo -n 1"):format(dir)) > 0
+	local head_pushed = true
+	table.insert(insts, {"head pushed", getnow() - now }); now = getnow()
+	local head =
+		exec(("cd %s; echo -n $(%s)"):format(dir, head_pushed and "git rev-parse HEAD" or "git branch --show-current"))
+	table.insert(insts, {"get current branch", getnow() - now }); now = getnow()
+	head = #head > 0 and head or exec(("cd %s; echo -n $(git rev-parse HEAD)"):format(dir))
+	table.insert(insts, {"get current branch 2?", getnow() - now }); now = getnow()
+
+	local m = vim.fn.mode()
+	local lines = m:match("[vV\022]") and { vim.fn.line("v"), vim.fn.line(".") } or nil
+	lines = (lines and (lines[1] > lines[2])) and { lines[2], lines[1] } or lines
+
+	local remote = exec(("cd %s; echo -n $(git remote get-url origin)"):format(dir))
+	table.insert(insts, {"git remote geturl origin", getnow() - now }); now = getnow()
+	if not vim.startswith(remote, "git@github.com:") then
+		print(("expected %s to start with git@github.com"):format(remote))
+		return
+	end
+	remote = remote:sub(#"git@github.com:" + 1, #remote - #".git")
+
+	local result = ("https://github.com/%s/blob/%s/%s%s"):format(
+		remote,
+		head,
+		path,
+		lines and (lines[1] == lines[2] and ("#L%s"):format(lines[1]) or ("#L%s-L%s"):format(lines[1], lines[2])) or ""
+	)
+
+	if markdown then
+		print(vim.inspect(lines))
+		if not lines then
+			result = ("[`%s`](%s)"):format(path, result)
+		else
+			if lines[1] == lines[2] then
+				result = ("[`%s`](%s)"):format(vim.fn.getbufoneline(0, lines[1]), result)
+			else
+				local extension = path:match("%.(%w*)$")
+				result = ("```%s\n%s\n%s\n```"):format(
+					extension,
+					("%s %s%s"):format(
+						({ py = "#", md = "<!--", lua = "--", yaml = "# ", yml = "#" })[extension] or "/**",
+						result,
+						({ py = "", md = " -->", lua = "", yaml = "", yml = "" })[extension] or " */"
+					),
+					table.concat(vim.api.nvim_buf_get_lines(0, lines[1] - 1, lines[2] - 1, false), "\n")
+				)
+			end
+		end
+	end
+	table.insert(insts, {"etc", vim.uv.hrtime() - now }); now = vim.uv.hrtime()
+	vim.notify(vim.inspect(insts));
+	print(vim.inspect(insts));
+
+	vim.fn.setreg("+", result)
+	if should_open then
+		vim.system({ "open", result })
+	end
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+	vim.schedule(function()
+		vim.api.nvim_echo({ { "Copied " }, { result, "GithubLinkGold" } }, false, {})
+	end)
+	return result
+end
+
+for _, mode in ipairs({ "n", "v" }) do
+	vim.api.nvim_set_keymap(
+		mode,
+		"<leader>gl",
+		"<cmd>lua glink(false)<CR>",
+		{ noremap = true, silent = true },
+		"Get Github Link"
+	)
+	vim.api.nvim_set_keymap(
+		mode,
+		"<leader>ghl",
+		"<cmd>lua glink(true)<CR>",
+		{ noremap = true, silent = true },
+		"Get Github Link"
+	)
+end
+
+for _, mode in ipairs({ "n", "v" }) do
+	vim.api.nvim_set_keymap(
+		mode,
+		"<leader>gm",
+		"<cmd>lua glink(false, true)<CR>",
+		{ noremap = true, silent = true },
+		"Get Github Link"
+	)
+	vim.api.nvim_set_keymap(
+		mode,
+		"<leader>ghm",
+		"<cmd>lua glink(true, true)<CR>",
+		{ noremap = true, silent = true },
+		"Get Github Link"
+	)
+end

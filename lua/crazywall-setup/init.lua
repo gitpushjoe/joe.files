@@ -36,8 +36,12 @@ local macros = {
 		.. " > 🎫 ,ticket" -- Use the ticket emoji for notes with #ticket (least priority)
 		.. " > ⌛ ,stale" -- Use the hourglass emoji for notes with #stale (2nd highest priority)
 		.. " > 🚨 ,urgent" -- Use the siren emoji for notes with #urgent (3rd highest priority)
-		.. " > 🔁 ,pr" -- Finally, use the double-arrow emoji for notes with #pr or #pull-request (highest priority)
+		.. " > 🔁 ,pr" -- Use the double-arrow emoji for notes with #pr or #pull-request (4th highest priority)
 		.. " > 🔁 ,pull-request"
+		.. " > 🌿 ,evergreen" -- Use the leaf for notes with #ever or #evergreen (5th highest priority)
+		.. " > 🌿 ,ever"
+		.. " > 🚥 ,waiting" --Use this traffic light emoji for notes with #waiting or #wfbf (highest priority)
+		.. " > 🚥 ,wfbf"
 		.. " ; "
 		-- Complete section
 		.. ".....task > complete,day-TTT > Complete:", -- Notes beginning with "task" with both #complete and #day-TTT (will be replaced below) are filed under "Complete"
@@ -212,7 +216,7 @@ local config = {
 		local first_line = section:get_lines()[1]
 		tag_map[section.id] = {}
 		-- Can specify tags in the title of the note, i.e. "meet: #All-Hands Meeting"
-		first_line = first_line:gsub("#(%w[%w@_-]*)", function(tag)
+		first_line = first_line:gsub("#(%w[%w%+@_-]*)", function(tag)
 			tag_map[section.id][tag:lower()] = 1
 			return tag:sub(2, 2) == "#" and tag:sub(2, #tag) or ""
 		end)
